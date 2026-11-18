@@ -12,7 +12,7 @@
 | .NET | Build.bat 使用引擎随附的 .NET SDK 10.0.203。系统另装 SDK 9.0.321。 |
 | Git / Git LFS | Git 2.47.1.windows.1，Git LFS 3.6.0。 |
 | 工具脚本与视频 | `py -3 --version` 返回 Python 3.14.7。在本次命令行的 PATH 上未找到 `ffmpeg` 和 `ffprobe`。后续测视频前安装 FFmpeg 并记录实际版本。 |
-| 索引解码 | 两个盘点/类型工具只需 Python 标准库。标准索引工具还需 MessagePack；本机实测 pip 26.2.1 随附的 msgpack 1.1.2。换机可在仓库外虚拟环境安装 `msgpack==1.1.2`，工具优先使用单独安装的包。 |
+| 索引解码 | 两个盘点/类型工具只需 Python 标准库。标准索引工具还需 MessagePack。本机实测 pip 26.2.1 随附的 msgpack 1.1.2。换机可在仓库外虚拟环境安装 `msgpack==1.1.2`，工具优先使用单独安装的包。 |
 | Blender | `blender.exe --version` 返回 4.5.15 LTS。Blender 用户插件 `blender_mcp.py` 声明版本 1.8。本次 Codex 会话可列出 Blender 工具，检查时无运行中的 Blender，尚未验证连接及导出。 |
 
 UE 插件版本取自同一引擎安装中的 `.uplugin`。
@@ -20,7 +20,7 @@ UE 插件版本取自同一引擎安装中的 `.uplugin`。
 | 插件 | 描述文件版本 | 本工程状态 |
 |---|---|---|
 | Enhanced Input | 1.0 | 工程显式启用，配置了默认输入类，尚无动作绑定。 |
-| Gameplay Abilities | 1.0 | 已安装，默认关闭；待架构试验再决定是否启用。 |
+| Gameplay Abilities | 1.0 | 已安装，默认关闭。待架构试验再决定是否启用。 |
 | StateTree / GameplayStateTree | 0.1 / 1.0 | 描述文件存在，默认关闭。 |
 | Control Rig / IK Rig | 1.0 / 1.0 | 引擎默认启用，尚未导入或重定向动作。 |
 | Functional Testing Editor | 1.0 | 已安装，默认关闭，首轮启动测试仅用引擎命令行。 |
@@ -30,7 +30,7 @@ MCP 是后续编辑器操作的可选依赖。配置前可以完成下述编译�
 
 ## 换机与编译
 
-1. 在新机用自己的 GitHub 身份克隆已发布的私有仓库；远端发布状态见 [当前进度](progress.md)。安装 Git LFS 后在克隆目录运行 `git lfs install --local` 和 `git lfs pull`。若尚无可克隆远端，可通过自己的离线介质转移该项目的 Git bundle，见下文。
+1. 在新机用自己的 GitHub 身份克隆已发布的私有仓库。远端发布状态见 [当前进度](progress.md)。安装 Git LFS 后在克隆目录运行 `git lfs install --local` 和 `git lfs pull`。若尚无可克隆远端，可通过自己的离线介质转移该项目的 Git bundle，见下文。
 2. 阅读根目录 `AGENTS.md`、`docs/progress.md`、`docs/decisions.md`、`docs/validation.md`，按需进入 `docs/research/`。私人录像与原游戏安装独立保管。编译最小 UE 工程无需安装原游戏。
 3. 安装 Epic 的 UE 5.8.4 Win64 发行版与 VS 的“使用 C++ 的游戏开发”工作负载，勾选 v143 x64/x86 工具与 Windows SDK 10.0.22621.0。命令行构建不依赖 Visual Studio 的具体付费版本。使用下列命令核对新安装的 `Build.version`。
 4. 将本机引擎路径赋给当前 PowerShell 会话中的 `UE_ROOT`。它只在本机使用。以 `Build.bat` 和项目文件的显式路径编译，可以在未建立 Windows 双击关联时运行。仓库中的 `EngineAssociation` 为 `5.8`。
@@ -53,7 +53,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Game target 构建失败，请检查 PGRGameBu
 
 ## 重跑启动验证
 
-在同一 PowerShell 会话继续执行。两次都使用编辑器宿主的 `-game` 模式。工程在 `Config/DefaultEngine.ini` 中引用引擎自带空地图 `/Engine/Maps/Entry`。运行进入 Tick 后，`-seconds` 使引擎发出正常退出请求；首次启动和着色器准备可额外耗时。
+在同一 PowerShell 会话继续执行。两次都使用编辑器宿主的 `-game` 模式。工程在 `Config/DefaultEngine.ini` 中引用引擎自带空地图 `/Engine/Maps/Entry`。运行进入 Tick 后，`-seconds` 使引擎发出正常退出请求。首次启动和着色器准备可额外耗时。
 
 ```powershell
 $common = @($project, '-game', '-unattended', '-NoSplash', '-NoSound', '-NoAnalytics', '-NoLiveCoding')
@@ -68,7 +68,7 @@ Get-ChildItem $logs -Filter 'PGRSmoke*.log' | Select-String -Pattern 'verbatimrh
 
 ## 可选的离线迁移
 
-在旧机把已提交的 Git 历史导出至仓库外的个人存储；新机将路径换成本地介质位置。Git bundle 包含提交和 Git 引用。如果后续新增 Git LFS 对象，另行从有权限的 LFS 远端拉取，或随离线备份转移所需的 LFS 对象。本机安装目录、凭据、原始素材与构建缓存均独立于 Git 历史。
+在旧机把已提交的 Git 历史导出至仓库外的个人存储。新机将路径换成本地介质位置。Git bundle 包含提交和 Git 引用。如果后续新增 Git LFS 对象，另行从有权限的 LFS 远端拉取，或随离线备份转移所需的 LFS 对象。本机安装目录、凭据、原始素材与构建缓存均独立于 Git 历史。
 
 ```powershell
 # 旧机，在仓库根目录执行
