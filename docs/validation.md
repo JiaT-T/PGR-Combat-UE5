@@ -1,5 +1,9 @@
 # 验证记录
 
+## 2026-11-19 · AnimeStudio 国服专用模式
+
+实际运行 PGR_CN_JP_TW 的 AssetMap 模式，对 resource 与 document 下的 82,187 个 .uab 按批核对输入文件名、逐文件日志、返回码与 JSON 配置字段。87 批均退出 0，全部 .uab 报告 no assets found。已用同字节不同扩展名的阳性对照验证工具能列出 3 个动画和 4 个 Animator。四份标准索引、两份引擎内置资源也已读取，未定位到七实模型或动画。未取得运行时状态或验证原作动画 FBX 导出。[原始计数、指令和验证范围](research/nanami-motion-assets.md)
+
 ## 2026-11-19 · AnimeStudio CLI
 
 用普通模式分别扫描 11 个散装文件、两份 UnityFS 索引及两个 .uab 样本，四份对象表的记录数依次为 870、1、1、0。核对全部 79,841 个 .uab 的文件头，并逐字节复核 15 个输入副本。未启用战双专用配置，未导出角色资源。[样本、命令与检索结果](research/nanami-motion-assets.md)
