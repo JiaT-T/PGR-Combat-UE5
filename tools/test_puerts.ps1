@@ -1,3 +1,4 @@
+# 运行编辑器或独立包，核对 Puerts 原生回调与脚本环境关闭日志。
 [CmdletBinding(DefaultParameterSetName = 'Editor')]
 param (
     [Parameter(ParameterSetName = 'Editor')]

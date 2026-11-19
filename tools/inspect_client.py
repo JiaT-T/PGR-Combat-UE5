@@ -19,6 +19,7 @@ SIGNATURES = (
 )
 
 
+# 核对指定资源目录与安装清单，并按扩展名统计抽样文件头。
 def inspect_group(root, group, records):
     prefix = f"{RESOURCE_BASE}/{group}/"
     expected = {
@@ -37,6 +38,7 @@ def inspect_group(root, group, records):
 
     groups = {}
     for extension, paths in sorted(by_ext.items()):
+        # 按文件名确定遍历顺序，使重复盘点的结果可以比较。
         paths.sort(key=lambda item: item.name)
         # Deterministic, evenly spaced positions in sorted names, inclusive of ends.
         n = min(SAMPLE_SIZE, len(paths))
@@ -62,6 +64,7 @@ def inspect_group(root, group, records):
     }
 
 
+# 读取安装版本、运行库与资源目录，汇总客户端结构。
 def inspect(root):
     data = root / "PGR_Data"
     records = json.loads((root / "LocalGameResources.json").read_text(encoding="utf-8-sig"))["resource"]
@@ -87,6 +90,7 @@ def inspect(root):
     }
 
 
+# 解析客户端根目录并以 JSON 输出调查结果。
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("client_root", type=Path, help="Folder containing PGR.exe")
