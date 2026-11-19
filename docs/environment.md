@@ -40,17 +40,17 @@ npm.cmd ci
 npm.cmd run build
 ```
 
-游戏脚本的可编辑入口是 `TypeScript/PGR/main.ts`，构建产物是 `Content/JavaScript/PGR/main.js`。每次修改 TS 后重新运行第三条命令并重启游戏实例。UBT 构建插件时会从上游复制运行库到 `Content/JavaScript/puerts`。这两个目录在 DefaultGame.ini 中列入游戏包。插件、复制的声明及运行库、npm 依赖和生成的 JS 均在本地恢复。当前脚本宿主使用窄类型声明，未启用依赖 V8 的编辑器全量 UE 声明生成器。
+游戏脚本的可编辑入口是 `TypeScript/PGR/main.ts`，构建产物是 `Content/JavaScript/PGR/main.js`。每次修改 TS 后重新运行第三条命令并重启游戏实例。UBT 构建插件时会从上游复制运行库到 `Content/JavaScript/puerts`。项目入口、角色规则目录 Content/JavaScript/Combat 和 Puerts 运行库均在 DefaultGame.ini 中列入游戏包。插件、复制的声明及运行库、npm 依赖和生成的 JS 均在本地恢复。当前脚本宿主使用窄类型声明，未启用依赖 V8 的编辑器全量 UE 声明生成器。
 
-按下节设置 UE_ROOT 并完成 Editor 构建后，运行 `./tools/test_puerts.ps1`。脚本会启动项目的空地图，检查原生回调和环境关闭日志，并输出本次日志路径。测试独立 Development 包时，传入 `-PackagedExe` 指向包中 `PGRCombat/Binaries/Win64/PGRCombat.exe`。
+按下节设置 UE_ROOT 并完成 Editor 构建后，运行 `./tools/test_puerts.ps1`。脚本会启动项目的默认地图，检查原生回调和环境关闭日志，并输出本次日志路径。测试独立 Development 包时，传入 `-PackagedExe` 指向包中 `PGRCombat/Binaries/Win64/PGRCombat.exe`。
 
-以下命令从根目录重新制作已测的 Windows 空地图包。Cook 命令只为本次关闭 AndroidFileServer，避免其在 Windows 训练工程中生成无关的设备设置。
+以下命令从根目录制作当前训练地图的 Windows 包。Cook 命令只为本次关闭 AndroidFileServer，避免其在 Windows 训练工程中生成无关的设备设置。
 
 ```powershell
 $uat = Join-Path $env:UE_ROOT 'Engine/Build/BatchFiles/RunUAT.bat'
 $project = (Resolve-Path './PGRCombat.uproject').Path
-$stage = Join-Path (Get-Location).Path 'StagedBuilds/Puerts'
-& $uat BuildCookRun "-project=$project" -nop4 -unattended -utf8output -nocompileeditor -platform=Win64 -clientconfig=Development -build -cook -map=/Engine/Maps/Entry -stage -pak -iostore -package "-stagingdirectory=$stage" "-additionalcookeroptions=-NoAnalytics -DisablePlugins=AndroidFileServer"
+$stage = Join-Path (Get-Location).Path 'StagedBuilds/BasicAttack'
+& $uat BuildCookRun "-project=$project" -nop4 -unattended -utf8output -nocompileeditor -platform=Win64 -clientconfig=Development -build -cook -map=/Game/Maps/L_CombatTraining -stage -pak -iostore -package "-stagingdirectory=$stage" "-additionalcookeroptions=-NoAnalytics -DisablePlugins=AndroidFileServer"
 if ($LASTEXITCODE -ne 0) { throw '打包失败，检查 AutomationTool 日志' }
 $game = Join-Path $stage 'Windows/PGRCombat/Binaries/Win64/PGRCombat.exe'
 ./tools/test_puerts.ps1 -PackagedExe $game
@@ -82,7 +82,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Game target 构建失败，请检查 PGRGameBu
 
 ## 重跑启动验证
 
-在同一 PowerShell 会话继续执行。两次都使用编辑器宿主的 `-game` 模式。工程在 `Config/DefaultEngine.ini` 中引用引擎自带空地图 `/Engine/Maps/Entry`。运行进入 Tick 后，`-seconds` 使引擎发出正常退出请求。首次启动和着色器准备可额外耗时。
+在同一 PowerShell 会话继续执行。两次都使用编辑器宿主的 `-game` 模式。工程在 `Config/DefaultEngine.ini` 中指定训练地图 `/Game/Maps/L_CombatTraining`。运行进入 Tick 后，`-seconds` 使引擎发出正常退出请求。首次启动和着色器准备可额外耗时。
 
 ```powershell
 $common = @($project, '-game', '-unattended', '-NoSplash', '-NoSound', '-NoAnalytics', '-NoLiveCoding')
@@ -90,7 +90,7 @@ $common = @($project, '-game', '-unattended', '-NoSplash', '-NoSound', '-NoAnaly
 if ($LASTEXITCODE -ne 0) { throw 'Null RHI 启动失败' }
 & $editor @common -d3d12 -windowed -ResX=640 -ResY=360 -seconds=8 "-ABSLOG=$logs/PGRSmokeD3D12.log"
 if ($LASTEXITCODE -ne 0) { throw 'D3D12 启动失败' }
-Get-ChildItem $logs -Filter 'PGRSmoke*.log' | Select-String -Pattern 'verbatimrhiname=|Bringing World /Engine/Maps/Entry|Engine is initialized|RequestExitWithStatus|LogExit: Exiting'
+Get-ChildItem $logs -Filter 'PGRSmoke*.log' | Select-String -Pattern 'verbatimrhiname=|Bringing World /Game/Maps/L_CombatTraining|Engine is initialized|RequestExitWithStatus|LogExit: Exiting'
 ```
 
 两份日志应各自显示预期 RHI（Null 或 D3D12）、地图进入游玩、引擎完成初始化和正常退出。两个编辑器宿主测试均返回 0。首次测试出现 Enhanced Input 本地玩家配置警告，补上 `Config/DefaultInput.ini` 后两种启动都已复测。加入 Puerts 后独立包的结果另见[验证记录](validation.md)。

@@ -1,5 +1,6 @@
 #include "Scripting/CombatScriptSubsystem.h"
 
+#include "Combat/CombatComponent.h"
 #include "Misc/Guid.h"
 #include "PapiBackendQuickjs.h"
 #include "ScriptEnv.h"
@@ -36,14 +37,29 @@ FString UCombatScriptSubsystem::GetStartupToken() const
 
 void UCombatScriptSubsystem::ConfirmStartup(const FString& Reply)
 {
-    if (!StartupToken.IsEmpty() && Reply.Equals(FString(TEXT("PGR/")) + StartupToken, ESearchCase::CaseSensitive))
+    if (ActionResolver.IsBound() && !StartupToken.IsEmpty() &&
+        Reply.Equals(FString(TEXT("PGR/")) + StartupToken, ESearchCase::CaseSensitive))
     {
         bScriptReady = true;
     }
 }
 
+FName UCombatScriptSubsystem::ResolveAction(UCombatComponent* Combat, ECombatCommand Command, ECombatInputPhase Phase) const
+{
+    if (!bScriptReady || !ActionResolver.IsBound())
+    {
+        return NAME_None;
+    }
+
+    // 传枚举名，避免 TS 手写的数值顺序与 UE 枚举脱节。
+    const FString CommandName = StaticEnum<ECombatCommand>()->GetNameStringByValue(static_cast<int64>(Command));
+    const FString PhaseName = StaticEnum<ECombatInputPhase>()->GetNameStringByValue(static_cast<int64>(Phase));
+    return ActionResolver.Execute(Combat, CommandName, PhaseName);
+}
+
 void UCombatScriptSubsystem::Deinitialize()
 {
+    ActionResolver.Unbind();
     ScriptEnvironment.Reset();
     bScriptReady = false;
     UE_LOG(LogPGRScript, Display, TEXT("Puerts bridge stopped"));

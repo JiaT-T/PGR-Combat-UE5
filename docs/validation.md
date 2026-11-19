@@ -1,5 +1,14 @@
 # 验证记录
 
+## 2026-11-19 · 剑盾首段普攻
+
+- TypeScript 5.9.3 编译通过。独立执行选招函数，普攻按下返回 `Attack01`，松开与其他命令返回空。
+- UE 5.8.4 的 Editor 与 Win64 Development 游戏目标均编译成功。训练图 `/Game/Maps/L_CombatTraining` Cook 结果为 0 个错误、0 个警告，BuildCookRun 返回 0。地图、模型、骨架、材质、动画及配置为本项目制作，源模型与动画保存在 `SourceArt/TrainingFighter.fbx`。场地使用 UE 自带的基础几何体。
+- Editor 游戏模式和独立包均使用 D3D12 执行 `PGR.Combat.BasicAttack.TrainingMap`，结果均为 Success。用例通过玩家控制器按下和释放映射到普攻的 J 键两次。两次都经 TS 选择 Attack01，Montage 播放约 0.90 秒后自然结束。再在同帧打断第三个实例并启动第四个实例，第四个实例保持有效并正常结束。D3D12 截图确认场地中可见完整人偶与武器。左键与 J 配在同一输入动作，本轮回归驱动的是 J。
+- 初次建图后，放置角色保存了空的模型及输入配置覆盖值，截图仅见地面，J 键未起手。重新从已保存的角色蓝图放置实例，再次打开地图核对配置后，上述两条运行路径均通过。当前动作时长与姿势用于验证制作链和输入流程，手感未作原作对标。
+
+可在编辑器的训练地图游玩状态运行控制台命令 `Automation RunTests PGR.Combat.BasicAttack.TrainingMap`。命令行复验使用 UnrealEditor-Cmd 的 `-game` 模式或启动 Development 包，传入 `-ExecCmds="Automation RunTests PGR.Combat.BasicAttack.TrainingMap" -TestExit="Automation Test Queue Empty"`，日志中检查该用例的 `Result={Success}`。
+
 ## 2026-11-19 · Puerts 与本机 UE 5.8.4
 
 | 实际执行项 | 结果 |
