@@ -16,6 +16,7 @@ QUICKJS = Path("Source/PapiQuickjs/Private/quickjs/quickjs.c")
 QUICKJS_SHA256 = "2671049fab412b4ebb0846d15556a4d854ee2c2c71d7081546d4b3a373f251eb"
 
 
+# 在指定目录运行 Git 命令并返回标准输出。
 def git(checkout: Path, *args: str) -> str:
     result = subprocess.run(
         ["git", "-C", str(checkout), *args], check=True, text=True,
@@ -24,6 +25,7 @@ def git(checkout: Path, *args: str) -> str:
     return result.stdout.strip()
 
 
+# 校验固定版本的 Puerts 和 QuickJS，并安装或核对本地插件。
 def install(destination: Path) -> None:
     destination = destination.resolve()
     destination.parent.mkdir(parents=True, exist_ok=True)

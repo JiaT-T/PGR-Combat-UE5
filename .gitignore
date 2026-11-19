@@ -29,6 +29,7 @@ __pycache__/
 /Local/
 /References/
 /Private/
+/Content/LocalOnly/
 .env
 .env.*
 *.pem
