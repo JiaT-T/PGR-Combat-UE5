@@ -1,7 +1,5 @@
 # PGR Combat UE5
 
-《战双帕弥什》UE5 战斗系统复刻是一个独立个人学习项目。目标是在寒假两周内交付可在 Windows 上重复游玩的单角色战斗 Demo。玩家在一间训练场里练习连段、闪避、信号球技能和超算，与一名可预测攻击的敌人交手。具体角色、动作来源和手感标准由项目主人确认。
-
 **试玩第一段普攻。** 在默认地图 `/Game/Maps/L_CombatTraining` 中点击播放，按 **J** 或 **鼠标左键**。TS 为剑盾普攻选择 `Attack01`，角色挥剑并自然收招，随后可再次输入。当前角色与动作是原创占位素材，一次挥击约 0.90 秒。第一次打开工程前请完成下方的插件恢复与 TS 构建。
 
 | 从这里进入 | 内容 |
@@ -28,4 +26,3 @@ npm.cmd run build
 
 脚本入口是 [TypeScript/PGR/main.ts](TypeScript/PGR/main.ts)。GameInstance 初始化时创建 Puerts QuickJS 环境并执行入口，退出时释放环境。修改 TS 后运行 `npm.cmd run build` 再启动游戏。C++ 宿主、UE 配置与工具分别位于 Source/、Config/、tools/。[构建与往返验证](docs/environment.md#puerts-与-typescript)
 
-Git 跟踪原创源码、可迁移配置和研究结论。使用原作商标仅为标明研究对象。原客户端、专有素材、未获授权的媒体、工作单位的任何保密资料和账号信息均不得进入本仓库。
