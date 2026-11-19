@@ -15,6 +15,7 @@
 #include "Motion/CombatActionSet.h"
 #include "Motion/CombatMotionComponent.h"
 
+// 创建战斗和动作组件，并设置胶囊体、模型原点与训练场镜头。
 APGRCombatCharacter::APGRCombatCharacter()
 {
     Combat = CreateDefaultSubobject<UCombatComponent>(TEXT("Combat"));
@@ -30,6 +31,7 @@ APGRCombatCharacter::APGRCombatCharacter()
     Camera->FieldOfView = 50.0f;
 }
 
+// 组件初始化完成后，将角色配置中的网格、动画类和动作表交给对应组件。
 void APGRCombatCharacter::PostInitializeComponents()
 {
     Super::PostInitializeComponents();
@@ -44,6 +46,7 @@ void APGRCombatCharacter::PostInitializeComponents()
     Motion->ActionSet = ActionSet;
 }
 
+// 切换控制器或重新接管角色时，重新安装当前本地玩家的战斗输入映射。
 void APGRCombatCharacter::PawnClientRestart()
 {
     Super::PawnClientRestart();
@@ -59,6 +62,7 @@ void APGRCombatCharacter::PawnClientRestart()
     }
 }
 
+// 从注册时的本地玩家移除战斗映射，并清除缓存的输入子系统。
 void APGRCombatCharacter::RemoveCombatMapping()
 {
     // 输入映射挂在 LocalPlayer 上，失去控制时需要主动移除本角色的映射。
@@ -69,18 +73,21 @@ void APGRCombatCharacter::RemoveCombatMapping()
     InputSubsystem.Reset();
 }
 
+// 交还角色控制权前，解除本地玩家与本角色的输入映射。
 void APGRCombatCharacter::UnPossessed()
 {
     RemoveCombatMapping();
     Super::UnPossessed();
 }
 
+// 角色退出世界前，清理仍在本地玩家上生效的映射。
 void APGRCombatCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
     RemoveCombatMapping();
     Super::EndPlay(EndPlayReason);
 }
 
+// 绑定普攻按下、松开和取消事件，将取消按松开处理。
 void APGRCombatCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
     Super::SetupPlayerInputComponent(PlayerInputComponent);
@@ -93,11 +100,13 @@ void APGRCombatCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInput
     }
 }
 
+// 向战斗组件提交一次普攻按下指令。
 void APGRCombatCharacter::OnBasicAttackPressed()
 {
     Combat->SubmitInput(ECombatCommand::BasicAttack, ECombatInputPhase::Pressed);
 }
 
+// 将普攻输入结束作为松开指令提交给战斗组件。
 void APGRCombatCharacter::OnBasicAttackReleased()
 {
     Combat->SubmitInput(ECombatCommand::BasicAttack, ECombatInputPhase::Released);

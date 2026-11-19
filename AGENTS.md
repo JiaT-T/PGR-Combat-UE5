@@ -19,6 +19,8 @@
 
 ## 代码风格
 
+每个自写函数、方法和构造函数都在函数头前用一句中文说明用途。C++ 反射接口的注释放在 `UFUNCTION` 前，声明和定义分开时两处都写明职责。此约定也适用于 TypeScript 和仓库内的工具脚本。
+
 按职责组织文件，C++ 类型与函数定义的花括号独占一行，局部计算就近命名，反射类型和成员沿用 Unreal 的命名约定。涉及单位、状态寿命、输入优先级或异步回调归属时，用中文说明原因。[个人项目 PathTracer-CPP 的风格参考](https://github.com/JiaT-T/PathTracer-CPP/blob/1773aa76447afaa7626dce93f07990952ae51ec9/PathTracer-CPP/Integrator.h)
 
 ## 研究、决策与阶段收尾

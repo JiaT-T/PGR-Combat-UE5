@@ -7,6 +7,7 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogPGRScript, Log, All);
 
+// 启动 QuickJS 战斗入口，并通过一次原生往返确认脚本已就绪。
 void UCombatScriptSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
@@ -30,11 +31,13 @@ void UCombatScriptSubsystem::Initialize(FSubsystemCollectionBase& Collection)
     }
 }
 
+// 向脚本返回本次启动校验所用的临时令牌。
 FString UCombatScriptSubsystem::GetStartupToken() const
 {
     return StartupToken;
 }
 
+// 核对脚本注册的选招回调和返回令牌，通过后允许脚本处理输入。
 void UCombatScriptSubsystem::ConfirmStartup(const FString& Reply)
 {
     if (ActionResolver.IsBound() && !StartupToken.IsEmpty() &&
@@ -44,6 +47,7 @@ void UCombatScriptSubsystem::ConfirmStartup(const FString& Reply)
     }
 }
 
+// 将输入指令和按键阶段转换为枚举名称，交给脚本解析为动作标识。
 FName UCombatScriptSubsystem::ResolveAction(UCombatComponent* Combat, ECombatCommand Command, ECombatInputPhase Phase) const
 {
     if (!bScriptReady || !ActionResolver.IsBound())
@@ -57,6 +61,7 @@ FName UCombatScriptSubsystem::ResolveAction(UCombatComponent* Combat, ECombatCom
     return ActionResolver.Execute(Combat, CommandName, PhaseName);
 }
 
+// 解除选招回调并释放当前游戏实例的脚本运行环境。
 void UCombatScriptSubsystem::Deinitialize()
 {
     ActionResolver.Unbind();

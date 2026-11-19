@@ -5,6 +5,7 @@
 #include "GameFramework/Character.h"
 #include "Motion/CombatActionSet.h"
 
+// 按动作表播放对应蒙太奇，并记录本次实例的结束回调和输入缓存窗口。
 bool UCombatMotionComponent::PlayAction(FName ActionId, FOnMontageEnded OnEnded)
 {
     const FCombatActionDefinition* Action = ActionSet ? ActionSet->Actions.Find(ActionId) : nullptr;
@@ -52,6 +53,7 @@ bool UCombatMotionComponent::PlayAction(FName ActionId, FOnMontageEnded OnEnded)
     return true;
 }
 
+// 用当前蒙太奇实例的本地播放位置判断是否进入输入缓存窗口。
 bool UCombatMotionComponent::IsInputBufferOpen() const
 {
     UAnimInstance* AnimInstance = PlayingAnimInstance.Get();
@@ -59,6 +61,7 @@ bool UCombatMotionComponent::IsInputBufferOpen() const
     return Instance && BufferStart < BufferEnd && Instance->GetPosition() >= BufferStart && Instance->GetPosition() <= BufferEnd;
 }
 
+// 按实例编号停止组件先前启动的蒙太奇并清除跟踪记录。
 void UCombatMotionComponent::StopAction()
 {
     UAnimInstance* AnimInstance = PlayingAnimInstance.Get();

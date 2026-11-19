@@ -24,9 +24,22 @@ UE 插件版本取自同一引擎安装中的 `.uplugin`。
 | StateTree / GameplayStateTree | 0.1 / 1.0 | 描述文件存在，默认关闭。 |
 | Control Rig / IK Rig | 1.0 / 1.0 | 引擎默认启用，尚未导入或重定向动作。 |
 | Functional Testing Editor | 1.0 | 已安装，默认关闭，首轮启动测试仅用引擎命令行。 |
-| Unreal MCP（ModelContextProtocol） | 1.0，Experimental | 引擎默认关闭。本次 Codex 会话未列出 Unreal MCP 服务端工具，未验证任何编辑器控制操作。 |
+| Unreal MCP（ModelContextProtocol / EditorToolset） | 1.0 / 1.0，Experimental | 工程为 Editor 目标显式启用两个引擎插件。2026-11-19 实测回环接口、工具发现、训练场地图和 Montage 元数据读取通过。 |
 
-MCP 是后续编辑器操作的可选依赖。配置前可以完成下述编译和启动。换机若需操作蓝图或资产，应在本项目的编辑器会话中单独启用所需插件，按该版本文档连接客户端，成功读取本工程对象后记录工具版本与结果。Blender 连接也应以读取专用测试场景验证。MCP 客户端的包版本在此次检查中未核实。
+### 连接个人工程的 UE MCP
+
+常规打开 `PGRCombat.uproject` 时，编辑器按 `Config/DefaultEditorPerProjectUserSettings.ini` 启动 MCP。项目使用独立的本机端口 `http://127.0.0.1:18475/mcp`。关闭该编辑器会终止服务。使用独立引擎时，也可以在已经指定 `UE_ROOT` 的 PowerShell 中后台启动编辑器：
+
+```powershell
+$editor = Join-Path $env:UE_ROOT 'Engine/Binaries/Win64/UnrealEditor.exe'
+$project = (Resolve-Path './PGRCombat.uproject').Path
+Start-Process $editor -ArgumentList @("`"$project`"", '-RenderOffScreen', '-NoSplash', '-NoSound', '-NoAnalytics', '-NoLiveCoding', '-unattended', '-DisablePlugins=AndroidFileServer') -WindowStyle Hidden
+Get-NetTCPConnection -State Listen -LocalPort 18475
+```
+
+Codex 客户端名称为 `pgr_unreal`。换机时从仓库根目录打开项目，在自己信任此克隆的前提下加载仓库中的 `.codex/config.toml`。本机的 Codex 工作区开在仓库上一级，已在该工作区单独登记相同端点。新会话读入配置后，可先调用 `list_toolsets`，再用 `call_tool` 调用 `editor_toolset.toolsets.scene.SceneTools` 的 `get_current_level`，默认地图应返回 `/Game/Maps/L_CombatTraining`。
+
+2026-11-19 从本机独立 UE 编辑器完成 HTTP MCP 握手（协议 `2025-06-18`），发现 19 个工具集。读取当前地图成功，`AssetTools.get_asset_class` 返回 `AM_NanamiBasic` 的类型 `AnimMontage`；`AssetTools.get_dependencies` 在 `DA_NanamiActions` 的依赖中返回该 Montage。运行第二个编辑器宿主做自动化时，可为第二个进程传入 `-ini:EditorPerProjectUserSettings:[/Script/ModelContextProtocolEngine.ModelContextProtocolSettings]:bAutoStartServer=False`。UE 5.8.4 的 Cook 等命令程序会自动跳过 MCP 自启动。
 
 ## Puerts 与 TypeScript
 

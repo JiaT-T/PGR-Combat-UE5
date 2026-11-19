@@ -1,5 +1,7 @@
 # 当前进度
 
+**2026-11-19 · 七实原模型本地训练场。** 默认涂装「泛用式·终」的 108 段角色动画已在 UE 中逐项回读。按资源层和文件名区分同名动作。战斗待机使用 `BaseLayer/Stand2`，剑盾普攻使用 `BaseLayer/Attack01`。本机内容浏览器入口是 `/Game/LocalOnly/HuaxuNanami/L_NanamiTraining`。编辑器 MCP 已开启并实测可调用。下一步用首段末尾的实际姿势和输入响应标定二段衔接窗口。[实测与本地资产迁移](validation.md#七实默认涂装本地实测) · [MCP 环境](environment.md)
+
 **2026-11-19 · 第一段可操作普攻。** 训练地图中的原创占位人偶已接入 Enhanced Input。TS 选择剑盾普攻 Attack01，C++ 受理、播放 Montage 并按动作实例处理结束或中断。下一段才引入普攻续段与闪避打断后的红球资格。[回归记录](validation.md)
 
 **2026-11-19 · Puerts 已接入。** 独立工程先验证 UE 5.8.4 与 QuickJS，再将相同的公开插件配置和脚本宿主直接接入 PGRCombat。在正式工程的 Editor 宿主和 Win64 Development 空地图包中，实际验证了 C++ 启动 TS 编译产物、脚本通过反射回调 C++、游戏退出时释放环境。独立包通过 Null RHI 与 D3D12 启动。下一步可以在这一入口接收普攻输入，选择占位动作。[验证记录](validation.md) · [换机恢复](environment.md#puerts-与-typescript)
