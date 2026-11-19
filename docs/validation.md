@@ -1,5 +1,9 @@
 # 验证记录
 
+## 2026-11-19 · UAB 文件头与代码可读性
+
+复核两个 .uab 和两份标准索引的开头、常规托管程序集与元数据路径。读取 GameAssembly.dll 的 384 个具名导出，反汇编了一个 IL2CPP 字符串长度函数并解释其返回值。安装清单未命中按常见扩展名命名的 C# 或 Lua 源码。该结果没有验证任何角色状态转换。[样本和限制](research/client-layout.md)
+
 ## 2026-11-19 · AnimeStudio 国服专用模式
 
 实际运行 PGR_CN_JP_TW 的 AssetMap 模式，对 resource 与 document 下的 82,187 个 .uab 按批核对输入文件名、逐文件日志、返回码与 JSON 配置字段。87 批均退出 0，全部 .uab 报告 no assets found。已用同字节不同扩展名的阳性对照验证工具能列出 3 个动画和 4 个 Animator。四份标准索引、两份引擎内置资源也已读取，未定位到七实模型或动画。未取得运行时状态或验证原作动画 FBX 导出。[原始计数、指令和验证范围](research/nanami-motion-assets.md)

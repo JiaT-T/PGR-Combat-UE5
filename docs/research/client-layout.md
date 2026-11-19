@@ -13,7 +13,7 @@
 
 | 位置 / 格式 | 实际观察 | 对复刻的作用 |
 |---|---|---|
-| PGR.exe、UnityPlayer.dll、GameAssembly.dll、PGRBase.dll | 游戏根目录的原生文件。检查文件名、大小与已有 PE 版本字段 | 识别构建形态。本阶段没有分析机器码 |
+| PGR.exe、UnityPlayer.dll、GameAssembly.dll、PGRBase.dll | 游戏根目录的原生文件。启动盘点检查了文件名、大小与已有 PE 版本字段 | 识别构建形态。11 月 19 日补充了 GameAssembly.dll 的单函数静态检查，见下文 |
 | LocalGameResources.json | 标准 JSON，resource 数组有 85,254 条，含相对目标名、大小与校验字段等 | 可统计类型与版本快照、核对文件是否落地。清单及下载定位字段留在游戏目录 |
 | PGR_Data/app.info、boot.config、ScriptingAssemblies.json、RuntimeInitializeOnLoads.json | app.info 指明产品。程序集清单有 168 个名称。含 Animation、Physics、Cinemachine、Timeline、UI 和 AI.Navigation 相关程序集 | 只能证明构建列出了模块。模块自身不能证明相机参数、打击检测算法或 AI 决策逻辑 |
 | PGR_Data/globalgamemanagers、level0–3、*.assets、*.resS、*.resource | 普通序列化文件与流式数据。已单独检查散装文件的对象目录 | 可定向查对象类型，区分 UI 动画、特效与战斗动作，见 [散装对象调查](unity-types.md) |
@@ -34,6 +34,14 @@
 | 无扩展名 | 2 | 13,179,780 | 两个文件中一个以 UnityFS 开头，另一个具有上述非标准前缀。launch 的两个无扩展名文件也各有一种前缀 |
 
 两目录合计 79,841 个 .uab。进一步读取两份标准索引后，确认所有 .uab 条目的逻辑路径字段都为空。索引仍能定位音库和教学视频候选。见[标准索引与媒体调查](public-index.md)。标准容器入口、普通对象目录、程序集名与资源清单是四种证据，不能相互替代。对自定义外层不做剥离、还原或保护判断。本轮未取得可供 UE 使用的授权原作素材。
+
+## 2026-11-19 · 资源包和代码能分别读到什么
+
+本轮重读 resource/launch 与 document/launch 各一个 .uab 和同目录索引，前者均以 HARUINKURO 开头，后者均以 UnityFS 开头。.uab 在这里是客户端的资源文件后缀。自定义外层的内部组织、压缩或加密方式仍未确定。普通 Unity 动画片段描述采样曲线和事件等数据，播放条件可能来自其他代码或配置。[国服模式全量建表结果](nanami-motion-assets.md)
+
+PC 4.9.1 的 ScriptingAssemblies.json 列有 Assembly-CSharp.dll，常规 PGR_Data/Managed 路径未见该文件，标准位置的 global-metadata.dat 为 0 字节。实际用 Visual Studio DUMPBIN 静态读取 GameAssembly.dll 的 PE 导出表及一个已命名函数的机器指令。384 个具名导出中有 239 个以 il2cpp_ 开头。普通运行时函数 il2cpp_string_length 读取一个 32 位字段后直接返回，按函数语义可写作伪代码 `return text.length;`。字段名是便于阅读的命名。此次只辨认了这个函数，未定位七实招式的调用者或转移条件。
+
+PGR_Data/Plugins 的 x86 和 x86_64 子目录均有 xlua.dll。对安装清单 85,254 条 dest 检查 .cs、.lua、.luac 以及这些后缀追加 .txt 或 .bytes 的情形，命中 0 条。插件是脚本支持线索，清单文件名不能证明包内是否有脚本，也不能决定七实的战斗逻辑写在哪一种语言里。
 
 ## 复查
 
