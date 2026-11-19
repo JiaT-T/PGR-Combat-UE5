@@ -28,6 +28,35 @@ UE 插件版本取自同一引擎安装中的 `.uplugin`。
 
 MCP 是后续编辑器操作的可选依赖。配置前可以完成下述编译和启动。换机若需操作蓝图或资产，应在本项目的编辑器会话中单独启用所需插件，按该版本文档连接客户端，成功读取本工程对象后记录工具版本与结果。Blender 连接也应以读取专用测试场景验证。MCP 客户端的包版本在此次检查中未核实。
 
+## Puerts 与 TypeScript
+
+2026-11-19 在本项目启用项目级 Puerts，源码固定在官方提交 `46ced3d44b1faea7ad2e3511497bbfb369824be2`。安装工具保留上游许可证，将插件描述符的模块列表限定为 ScriptEnv、PapiQuickjs 和构建依赖 ParamDefaultValueMetas，其余插件源码维持上游版本。QuickJS-NG 0.6.1 随项目编译。Node.js 24.20.0、npm 11.19.0 和锁定的 TypeScript 5.9.3 用于在 Windows 上生成运行脚本。[固定版本的开源插件](https://github.com/Tencent/puerts/tree/46ced3d44b1faea7ad2e3511497bbfb369824be2/unreal/Puerts)
+
+克隆到新设备后，在仓库根目录、首次编译或打开工程前执行以下命令。前两条需要访问公开依赖源。安装器会校验已有插件的上游文件。
+
+```powershell
+python tools/install_puerts.py
+npm.cmd ci
+npm.cmd run build
+```
+
+游戏脚本的可编辑入口是 `TypeScript/PGR/main.ts`，构建产物是 `Content/JavaScript/PGR/main.js`。每次修改 TS 后重新运行第三条命令并重启游戏实例。UBT 构建插件时会从上游复制运行库到 `Content/JavaScript/puerts`。这两个目录在 DefaultGame.ini 中列入游戏包。插件、复制的声明及运行库、npm 依赖和生成的 JS 均在本地恢复。当前脚本宿主使用窄类型声明，未启用依赖 V8 的编辑器全量 UE 声明生成器。
+
+按下节设置 UE_ROOT 并完成 Editor 构建后，运行 `./tools/test_puerts.ps1`。脚本会启动项目的空地图，检查原生回调和环境关闭日志，并输出本次日志路径。测试独立 Development 包时，传入 `-PackagedExe` 指向包中 `PGRCombat/Binaries/Win64/PGRCombat.exe`。
+
+以下命令从根目录重新制作已测的 Windows 空地图包。Cook 命令只为本次关闭 AndroidFileServer，避免其在 Windows 训练工程中生成无关的设备设置。
+
+```powershell
+$uat = Join-Path $env:UE_ROOT 'Engine/Build/BatchFiles/RunUAT.bat'
+$project = (Resolve-Path './PGRCombat.uproject').Path
+$stage = Join-Path (Get-Location).Path 'StagedBuilds/Puerts'
+& $uat BuildCookRun "-project=$project" -nop4 -unattended -utf8output -nocompileeditor -platform=Win64 -clientconfig=Development -build -cook -map=/Engine/Maps/Entry -stage -pak -iostore -package "-stagingdirectory=$stage" "-additionalcookeroptions=-NoAnalytics -DisablePlugins=AndroidFileServer"
+if ($LASTEXITCODE -ne 0) { throw '打包失败，检查 AutomationTool 日志' }
+$game = Join-Path $stage 'Windows/PGRCombat/Binaries/Win64/PGRCombat.exe'
+./tools/test_puerts.ps1 -PackagedExe $game
+./tools/test_puerts.ps1 -PackagedExe $game -D3D12
+```
+
 ## 换机与编译
 
 1. 在新机用自己的 GitHub 身份克隆已发布的私有仓库。远端发布状态见 [当前进度](progress.md)。安装 Git LFS 后在克隆目录运行 `git lfs install --local` 和 `git lfs pull`。若尚无可克隆远端，可通过自己的离线介质转移该项目的 Git bundle，见下文。
@@ -64,7 +93,7 @@ if ($LASTEXITCODE -ne 0) { throw 'D3D12 启动失败' }
 Get-ChildItem $logs -Filter 'PGRSmoke*.log' | Select-String -Pattern 'verbatimrhiname=|Bringing World /Engine/Maps/Entry|Engine is initialized|RequestExitWithStatus|LogExit: Exiting'
 ```
 
-两份最新日志应各自显示预期 RHI（Null 或 D3D12）、地图进入游玩、引擎完成初始化和正常退出。本机均满足且退出码为 0。D3D12 日志记录了 RTX 适配器和销毁 `PGRCombat` 游戏窗口。首次测试出现 Enhanced Input 本地玩家配置警告，补上 `Config/DefaultInput.ini` 后两种启动都已复测。战斗手感、交互、编辑器资产操作、Cook、打包、独立发行包启动仍待验。
+两份日志应各自显示预期 RHI（Null 或 D3D12）、地图进入游玩、引擎完成初始化和正常退出。两个编辑器宿主测试均返回 0。首次测试出现 Enhanced Input 本地玩家配置警告，补上 `Config/DefaultInput.ini` 后两种启动都已复测。加入 Puerts 后独立包的结果另见[验证记录](validation.md)。
 
 ## 可选的离线迁移
 

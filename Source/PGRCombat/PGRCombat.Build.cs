@@ -5,6 +5,7 @@ public class PGRCombat : ModuleRules
     public PGRCombat(ReadOnlyTargetRules target) : base(target)
     {
         PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
-        PrivateDependencyModuleNames.Add("Core");
+        PublicDependencyModuleNames.AddRange(new[] { "Core", "CoreUObject", "Engine" });
+        PrivateDependencyModuleNames.AddRange(new[] { "ScriptEnv", "PapiQuickjs" });
     }
 }

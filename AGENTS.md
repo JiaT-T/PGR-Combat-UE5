@@ -7,6 +7,7 @@
 1. 读取 README.md、docs/progress.md 和 docs/validation.md，核对当前分支、提交、未提交改动与最近一次实测范围。
 2. 查阅 docs/decisions.md 和 docs/architecture.md。涉及某项战斗行为时到 docs/research/mechanics.md 查证据和待测条件。复查客户端时先核对包版本。只读与当次工作直接相关的记录。
 3. 构建或迁机前读 docs/environment.md。命令从仓库根目录执行，引擎与客户端路径由本机参数提供。开发、编译和自测的对象始终是本仓库的原创 Demo。
+   新克隆需先按环境说明安装固定提交的项目级 Puerts，并构建 TypeScript。自研脚本从 TypeScript/PGR/ 开始，生成的 JavaScript 由构建产生。跨语言入口或打包配置变化后运行 tools/test_puerts.ps1 核对原生往返。
 4. 先实现当前里程碑的一条可验收路径。保持 C++ 状态转换与表现事件可追踪，蓝图、Montage 和数据资产负责内容配置。角色特例需有已选角色和可验证需求。
 
 ## 来源与操作边界

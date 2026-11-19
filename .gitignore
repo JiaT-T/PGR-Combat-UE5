@@ -7,6 +7,11 @@ Saved/
 /StagedBuilds/
 /Packages/
 /Artifacts/
+/Plugins/Puerts/
+/Plugins/puerts-install-*/
+/node_modules/
+/Typing/
+/Content/JavaScript/
 .vs/
 .idea/
 .vscode/

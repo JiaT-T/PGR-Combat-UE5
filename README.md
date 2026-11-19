@@ -21,6 +21,11 @@ git clone https://github.com/JiaT-T/PGR-Combat-UE5.git
 cd PGR-Combat-UE5
 git lfs install --local
 git lfs pull
+python tools/install_puerts.py
+npm.cmd ci
+npm.cmd run build
 ```
 
-源码位于 Source/，引擎设置位于 Config/，聚合调查工具位于 tools/。Git 跟踪原创源码、可迁移配置和研究结论。使用原作商标仅为标明研究对象。原客户端、专有素材、未获授权的媒体、工作单位的任何保密资料和账号信息均不得进入本仓库。
+脚本入口是 [TypeScript/PGR/main.ts](TypeScript/PGR/main.ts)。GameInstance 初始化时创建 Puerts QuickJS 环境并执行入口，退出时释放环境。修改 TS 后运行 `npm.cmd run build` 再启动游戏。C++ 宿主、UE 配置与工具分别位于 Source/、Config/、tools/。[构建与往返验证](docs/environment.md#puerts-与-typescript)
+
+Git 跟踪原创源码、可迁移配置和研究结论。使用原作商标仅为标明研究对象。原客户端、专有素材、未获授权的媒体、工作单位的任何保密资料和账号信息均不得进入本仓库。

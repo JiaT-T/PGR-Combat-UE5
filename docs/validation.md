@@ -1,5 +1,15 @@
 # 验证记录
 
+## 2026-11-19 · Puerts 与本机 UE 5.8.4
+
+| 实际执行项 | 结果 |
+| --- | --- |
+| 独立探针 | 独立目录编译官方固定提交的 ScriptEnv、PapiQuickjs 和宿主模块。TypeScript 5.9.3 编译成功。用 UnrealEditor-Cmd 的游戏模式启动空地图，原生端收到了通过验证的脚本回传值，随后释放环境，进程返回 0。 |
+| 正式工程 | 从官方源码恢复项目级插件，执行 npm ci、npm run build 和 PGRCombatEditor Win64 Development 构建。Editor 游戏模式下同一往返通过，退出码 0。 |
+| Win64 独立包 | RunUAT BuildCookRun 对 /Engine/Maps/Entry 完成 Win64 Development 构建、Cook、Stage 和打包。UnrealPak 的列表包含项目的 PGR/main.js 和 Puerts 运行库，打包目录没有散装 main.js。直接启动包内游戏，在 Null RHI 和 D3D12 各通过一次往返并正常退出。D3D12 使用 RTX 5060。 |
+
+往返由 GameInstance 的原生宿主发起。TS 编译产物从 Puerts 取得本次宿主，通过 UFUNCTION 读取本次随机值，构造带前缀的回复并调用第二个 UFUNCTION。C++ 校验匹配才打印 `completed native round trip`。验证脚本同时检查退出码、成功次数和随后发生的环境关闭。本轮未验证热重载、编辑器全量声明生成、七实技能或 Shipping 构建。[恢复与验证命令](environment.md#puerts-与-typescript)
+
 ## 2026-11-19 · 玩家确认的输入规则
 
 红蓝二段资格保留、普攻末段输入缓存、技能球与闪避及切形态打断普攻后从首段重启，均按玩家说明登记。大招已确认优先于普攻。各段缓存窗口起止尚待实测，本轮未运行游戏或 UE 工程。[规则与来源](research/mechanics.md)
@@ -49,4 +59,4 @@
 | GitHub 发布 | 核实已有登录身份 JiaT-T，建库返回 HTTP 201，回读 visibility=private、push=true。首次推送 main 返回成功。远端分支与本地基线 `2f9448d8fcbbc3ba9308ef1a67a487301e4e2d3a` 一致，GitHub tree 与本地的 24 个文件名和 blob SHA 全部相符 | 首批文件均为原创 UTF-8 文本，已核对路径、大小与敏感标记。仓库级作者采用账号的 GitHub noreply 邮箱 |
 | 干净克隆迁移演练 | 从 GitHub HTTPS 克隆至新的系统临时目录，核对 HEAD 为上述基线。git lfs install --local 和 git lfs pull 成功，当前有 0 个 LFS 文件。12 份文档、3 个工具和工程均存在。新目录重新编译 PGRCombat.cpp、链接 Editor DLL，Null RHI 进入 Entry 地图并正常退出。两个进程均返回 0，运行后 Git 工作树干净 | 同机干净检出，共享本机 UE、SDK 与系统缓存。第二台实体电脑仍待独立复测 |
 
-**仍待验证的内容包括**原作战斗时序和机制行为、逐帧标定、目标角色手感、蓝图编辑和动画重定向、MCP 会话、自动化战斗回归、Cook、打包和第二台实体电脑运行。未启动原作、登录原作账号或自动输入游戏指令。
+**仍待验证的内容包括**原作战斗时序和机制行为、目标角色手感、蓝图编辑和动画重定向、MCP 会话、自动化战斗回归、带战斗内容的包和第二台实体电脑运行。
