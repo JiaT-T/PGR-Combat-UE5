@@ -50,4 +50,16 @@ V02 以 30 fps 记录画面。网页的片段采样率同为 30 fps，二者时�
 
 ## 数据边界
 
+### 2026-11-19 · AnimeStudio 读取 PC 4.9.1 的实测
+
+使用上游项目发布的 Windows x64 .NET 10 CLI，程序自报版本 `1.1.0+76234e9f6f5a839504f41f9612719529fe2309a5`。从本机安装目录取样，在仓库外对副本运行 `AnimeStudio.CLI.exe <样本目录> <输出目录> --game Normal --map_op AssetMap --map_type JSON`。四次建表均退出 0。仅生成本地对象目录，测试后 15 个输入副本均与安装原件逐字节一致。[上游版本](https://github.com/Escartem/AnimeStudio/tree/76234e9f6f5a839504f41f9612719529fe2309a5)
+
+| 输入 | 普通模式建表结果 |
+|---|---|
+| 11 个散装 Unity 文件（globalgamemanagers、4 个 level 与 6 个 .assets） | 870 项，含 3 个 AnimationClip 和 4 个 Animator。片段名为 Recorded、SequenceAnimation、Take 001，Animator 名为 Dialog、FullScreenBackground、LaunchLogo、LogoRImg。名称与容器均未命中七实、芒星、Nanami、Startrail、qishimx、YongYeChao、角色标识 1051005 或 Attack40–48 |
+| launch/index、matrix/InPkgIndex | 分别列出 1 个 TextAsset。索引内的路径覆盖情况见[标准索引调查](public-index.md) |
+| launch、matrix 各取一个 .uab，按文件名排序取中间项 | 两项均报告 no assets found，JSON 条目数为 0 |
+
+另外直接核对 launch 与 matrix 所有 .uab 的前 10 字节。17 + 79,824 = 79,841 个文件均以 HARUINKURO 开头，无读取失败，未发现直接以 UnityFS 开头的例外。此项为全量文件头检查，工具解析只抽了上述两包。命令行确实提供 PGR_CN_JP_TW 和 PGR_GLB_KR，所测版本的 UnityCN 默认密钥配置也包含战双条目。专用模式未对客户端执行，其对本版本外层的兼容性未知。文件头本身不足以判断加密方式。当前没有定位七实的本地动作包或验证 FBX 导出。
+
 公开清单有片段时长、帧率、循环与状态关联。抽查 Move1、Attack11、Attack52、Attack61、Attack64 的公开片段数据能读到动画轨道，未见命中、扣球或无敌事件。清单中的混合时间和挂点记录也不足以恢复这些规则。本机 PC 4.9.1 仍缺七实动作到具体资源包的映射。站方说明网页预览有逐帧功能，下载用的 GLB 不含动画与着色器。仓库仅保存测量摘要与来源链接，当前没有可用于 UE 工程分发的原作动作授权记录。[站方的模型查看器说明](https://huaxu.app/blog/model-viewer)
