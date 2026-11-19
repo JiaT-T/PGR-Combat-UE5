@@ -40,26 +40,22 @@ WORDS = re.compile(r"[A-Z]+(?=[A-Z][a-z]|[^A-Za-z]|$)|[A-Z]?[a-z]+|[0-9]+")
 
 
 class Directory:
-    # 记录目录数据及字节序，并从起始位置开始读取。
     def __init__(self, data, byte_order):
         self.data = data
         self.byte_order = byte_order
         self.pos = 0
 
-    # 将读取位置推进指定字节数，越界时报告目录截断。
     def skip(self, size):
         if self.pos + size > len(self.data):
             raise ValueError("unexpected end of metadata")
         self.pos += size
 
-    # 按目录字节序读取指定结构，并推进读取位置。
     def read(self, fmt):
         fields = struct.Struct(self.byte_order + fmt)
         start = self.pos
         self.skip(fields.size)
         return fields.unpack_from(self.data, start)
 
-    # 读取目录头中以零字节结尾的引擎版本。
     def string(self):
         end = self.data.find(b"\0", self.pos, self.pos + 128)
         if end == -1:
@@ -68,7 +64,6 @@ class Directory:
         self.pos = end + 1
         return version
 
-    # 读取条目数，并用剩余数据长度检查其取值范围。
     def count(self, minimum_size):
         (count,) = self.read("i")
         if not 0 <= count <= (len(self.data) - self.pos) // minimum_size:
@@ -76,7 +71,6 @@ class Directory:
         return count
 
 
-# 在对象边界内读取带长度前缀的 UTF-8 名称并跳过对齐字节。
 def read_string(stream, limit, byte_order):
     if stream.tell() + 4 > limit:
         raise ValueError("truncated name metadata")
@@ -91,7 +85,6 @@ def read_string(stream, limit, byte_order):
     return value
 
 
-# 按文件头特征对 TextAsset 的内容格式作初步分类。
 def payload_category(prefix):
     if not prefix:
         return "empty"
@@ -112,7 +105,6 @@ def payload_category(prefix):
     return "text_like_prefix"
 
 
-# 检查 JSON 对象的字段名是否包含战斗或图形设置关键词。
 def json_field_category(data):
     try:
         root = json.loads(data)
@@ -132,7 +124,6 @@ def json_field_category(data):
     return "no_selected_field_marker"
 
 
-# 按名称和内容标记统计选定类型的动画、文本和脚本对象。
 def summarize_names(path, ranges, byte_order):
     clips, buckets, markers = Counter(), Counter(), {}
     text_names, text_formats, json_fields = Counter(), Counter(), Counter()
@@ -188,7 +179,6 @@ def summarize_names(path, ranges, byte_order):
             "mono_script_name_labels": dict(sorted(markers.items()))}
 
 
-# 读取单个序列化文件的对象目录并统计各类型数量。
 def inspect_file(path, classify_names=False):
     file_size = path.stat().st_size
     with path.open("rb") as stream:
@@ -247,7 +237,6 @@ def inspect_file(path, classify_names=False):
     return report
 
 
-# 遍历支持的资源文件，将各文件的统计或错误写入 JSON。
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("data_directory", type=Path, help="player PGR_Data directory")

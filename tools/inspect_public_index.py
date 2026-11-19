@@ -8,25 +8,21 @@ import re
 import struct
 
 
-# 遇到不支持的索引布局时报告原因并停止解析。
 def require(condition, message):
     if not condition:
         raise ValueError(message)
 
 
-# 将偏移量向上对齐到指定字节边界。
 def align(value, boundary):
     return (value + boundary - 1) // boundary * boundary
 
 
-# 解压一个标准 LZ4 数据块并校验输出大小。
 def lz4_block(data, expected):
     # Unity format 3 (LZ4HC) uses the standard LZ4 block representation.
     require(0 <= expected <= 256 * 1024, "Unexpected block size")
     out = bytearray()
     p = 0
 
-    # 读取 LZ4 长度扩展字节，并推进当前块的读取位置。
     def length(base):
         nonlocal p
         if base == 15:
@@ -58,7 +54,6 @@ def lz4_block(data, expected):
     return out
 
 
-# 校验 UnityFS 索引包布局并读取其中的序列化文件。
 def read_index_bundle(path):
     require(path.stat().st_size <= 16 * 1024 * 1024, "Index exceeds supported size")
     data = path.read_bytes()
@@ -86,7 +81,6 @@ def read_index_bundle(path):
     return serialized, engine, block_count
 
 
-# 从索引的对象目录定位并读取 TextAsset 内容。
 def read_text_asset(data):
     require(struct.unpack_from(">I", data, 8)[0] == 22 and data[16] == 0, "Expected little-endian serialized file v22")
     data_offset, = struct.unpack_from(">Q", data, 32)
@@ -126,7 +120,6 @@ def read_text_asset(data):
     return text_asset
 
 
-# 将 TextAsset 中的 MessagePack 索引解码为 Python 对象。
 def decode_messagepack(payload):
     try:
         import msgpack
@@ -136,7 +129,6 @@ def decode_messagepack(payload):
     return msgpack.unpackb(bytes(payload), raw=False, strict_map_key=False)
 
 
-# 读取 CRI 表中的字段，二进制字段只记录位置和长度。
 def utf_rows(data):
     """Read a plain CRI @UTF table. Return strings and offsets without reading data blobs."""
     require(data[:4] == b"@UTF", "Expected a plain @UTF table")
@@ -149,7 +141,6 @@ def utf_rows(data):
     pos = 32
     field_offset = 0
 
-    # 从 CRI 字符串区的指定偏移读取 UTF-8 字符串。
     def string(offset):
         start = string_start + offset
         return data[start:data.index(0, start, blob_start)].decode("utf-8")
@@ -184,7 +175,6 @@ def utf_rows(data):
     return rows
 
 
-# 汇总训练视频的画面规格和选定音频表的提示音数量。
 def media_metadata(directory, files):
     # Logical names are selection criteria only. Physical reads use validated basenames.
     selected = {
@@ -231,7 +221,6 @@ def media_metadata(directory, files):
     return {"training_video_header_modes": dict(video_modes), "selected_cue_tables": cue_counts}
 
 
-# 汇总索引中的资源类型和逻辑名，并按需读取媒体头。
 def summarize(path, inspect_media=False):
     data, engine, blocks = read_index_bundle(path)
     payload = read_text_asset(data)
