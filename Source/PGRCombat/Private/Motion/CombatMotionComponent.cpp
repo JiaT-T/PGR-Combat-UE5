@@ -5,7 +5,7 @@
 #include "GameFramework/Character.h"
 #include "Motion/CombatActionSet.h"
 
-// 按动作表播放对应蒙太奇，并记录本次实例的结束回调和输入缓存窗口。
+// 播放选定的蒙太奇，成功后用新段的混入时长淡出先前的动作。
 bool UCombatMotionComponent::PlayAction(FName ActionId, FOnMontageEnded OnEnded)
 {
     const FCombatActionDefinition* Action = ActionSet ? ActionSet->Actions.Find(ActionId) : nullptr;
@@ -50,14 +50,24 @@ bool UCombatMotionComponent::PlayAction(FName ActionId, FOnMontageEnded OnEnded)
     }
 
     Instance->OnMontageEnded = MoveTemp(OnEnded);
+    UAnimInstance* PreviousAnimInstance = PlayingAnimInstance.Get();
+    const int32 PreviousInstanceId = MontageInstanceId;
     PlayingAnimInstance = AnimInstance;
     MontageInstanceId = Instance->GetInstanceID();
     BufferEnd = End;
     BufferStart = FMath::Clamp(End - Action->InputBufferSeconds, Start, End);
+    if (PreviousAnimInstance)
+    {
+        FAnimMontageInstance* Previous = PreviousAnimInstance->GetMontageInstanceForID(PreviousInstanceId);
+        if (Previous && Previous->IsActive())
+        {
+            Previous->Stop(Montage->BlendIn);
+        }
+    }
     return true;
 }
 
-// 用当前蒙太奇实例的本地播放位置判断是否进入输入缓存窗口。
+// 用当前蒙太奇实例的本地播放位置判断是否允许立即续段。
 bool UCombatMotionComponent::IsInputBufferOpen() const
 {
     UAnimInstance* AnimInstance = PlayingAnimInstance.Get();

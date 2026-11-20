@@ -44,6 +44,7 @@ void APGRCombatCharacter::PostInitializeComponents()
         GetMesh()->SetAnimInstanceClass(FighterAnimClass);
     }
     Motion->ActionSet = ActionSet;
+    SetAnimRootMotionTranslationScale(FighterRootMotionTranslationScale);
 }
 
 // 切换控制器或重新接管角色时，重新安装当前本地玩家的战斗输入映射。
