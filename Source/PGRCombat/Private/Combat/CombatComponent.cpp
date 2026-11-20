@@ -23,7 +23,7 @@ void UCombatComponent::EndPlay(const EEndPlayReason::Type Reason)
     Super::EndPlay(Reason);
 }
 
-// 请脚本按输入选招；空闲时直接起手，动作中只在衔接窗口受理下一段。
+// 按脚本选招，同类动作检查接续窗口，跨指令输入交给打断规则。
 ECombatInputResult UCombatComponent::SubmitInput(ECombatCommand Command, ECombatInputPhase Phase)
 {
     UGameInstance* Game = GetWorld() ? GetWorld()->GetGameInstance() : nullptr;
@@ -39,18 +39,40 @@ ECombatInputResult UCombatComponent::SubmitInput(ECombatCommand Command, ECombat
         return ECombatInputResult::Ignored;
     }
 
-    if (ActiveInstanceId != 0 &&
-        (Command != ECombatCommand::BasicAttack || Phase != ECombatInputPhase::Pressed || !Motion->IsInputBufferOpen()))
+    if (ActiveInstanceId != 0)
+    {
+        if (Phase == ECombatInputPhase::Pressed && Command != ActiveCommand)
+        {
+            return TryInterruptBasicAttack(Command, ActionId);
+        }
+        if (Phase != ECombatInputPhase::Pressed || !Motion->IsInputBufferOpen())
+        {
+            NotifyAction(ActionId, 0, ECombatActionEvent::Rejected);
+            return ECombatInputResult::Rejected;
+        }
+    }
+    return StartAction(Command, ActionId, ECombatActionEvent::Chained);
+}
+
+// 检查替换指令能否打断普攻，符合条件时由新动作接管实例。
+ECombatInputResult UCombatComponent::TryInterruptBasicAttack(ECombatCommand Command, FName ActionId)
+{
+    if (ActiveCommand != ECombatCommand::BasicAttack || Command != ECombatCommand::RedOrb)
     {
         NotifyAction(ActionId, 0, ECombatActionEvent::Rejected);
         return ECombatInputResult::Rejected;
     }
+    return StartAction(Command, ActionId, ECombatActionEvent::Interrupted);
+}
 
+// 先尝试起播，再更新当前实例并通知被替换的动作。
+ECombatInputResult UCombatComponent::StartAction(ECombatCommand Command, FName ActionId, ECombatActionEvent PreviousEvent)
+{
     const int64 PreviousInstanceId = ActiveInstanceId;
     const FName PreviousActionId = ActiveActionId;
     const int64 InstanceId = ++LastInstanceId;
     const FOnMontageEnded Ended = FOnMontageEnded::CreateUObject(this, &UCombatComponent::OnMontageEnded, InstanceId);
-    if (!Motion->PlayAction(ActionId, Ended))
+    if (!Motion->PlayAction(ActionId, Command, Ended))
     {
         NotifyAction(ActionId, InstanceId, ECombatActionEvent::Rejected);
         return ECombatInputResult::Rejected;
@@ -58,12 +80,13 @@ ECombatInputResult UCombatComponent::SubmitInput(ECombatCommand Command, ECombat
 
     ActiveInstanceId = InstanceId;
     ActiveActionId = ActionId;
+    ActiveCommand = Command;
     if (PreviousInstanceId != 0)
     {
-        NotifyAction(PreviousActionId, PreviousInstanceId, ECombatActionEvent::Chained);
+        NotifyAction(PreviousActionId, PreviousInstanceId, PreviousEvent);
     }
 
-    // 续段通知的监听者可以打断新实例，此时不能再广播过期的起手。
+    // 旧动作的监听者可能打断新实例，起手通知仅发给当前实例。
     if (ActiveInstanceId == InstanceId)
     {
         NotifyAction(ActionId, InstanceId, ECombatActionEvent::Started);

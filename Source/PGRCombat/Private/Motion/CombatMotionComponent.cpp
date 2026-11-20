@@ -6,12 +6,16 @@
 #include "Motion/CombatActionSet.h"
 
 // 播放选定的蒙太奇，成功后用新段的混入时长淡出先前的动作。
-bool UCombatMotionComponent::PlayAction(FName ActionId, FOnMontageEnded OnEnded)
+bool UCombatMotionComponent::PlayAction(FName ActionId, ECombatCommand Command, FOnMontageEnded OnEnded)
 {
     const FCombatActionDefinition* Action = ActionSet ? ActionSet->Actions.Find(ActionId) : nullptr;
     const ACharacter* Character = Cast<ACharacter>(GetOwner());
     UAnimInstance* AnimInstance = Character && Character->GetMesh() ? Character->GetMesh()->GetAnimInstance() : nullptr;
     if (!Action || !Action->Montage || !AnimInstance)
+    {
+        return false;
+    }
+    if (Action->Command != Command)
     {
         return false;
     }

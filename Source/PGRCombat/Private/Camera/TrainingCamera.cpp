@@ -1,8 +1,12 @@
 #include "Camera/TrainingCamera.h"
 
 #include "Camera/CameraTypes.h"
+#include "CollisionQueryParams.h"
+#include "CollisionShape.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Engine/World.h"
 #include "GameFramework/Character.h"
+#include "GameFramework/SpringArmComponent.h"
 
 // 抬升腾空角色的取景中心，再计算容纳头、脚及武器端点所需的最短后拉距离。
 void UTrainingCameraComponent::GetCameraView(float DeltaTime, FMinimalViewInfo& OutResult)
@@ -17,7 +21,8 @@ void UTrainingCameraComponent::GetCameraView(float DeltaTime, FMinimalViewInfo& 
     }
 
     const double Rise = Mesh->GetSocketLocation(FocusBone).Z - Character->GetActorLocation().Z;
-    OutResult.Location.Z += FMath::Max(0.0, Rise - GroundClearance) * 0.65;
+    const double Lift = FMath::Max(0.0, Rise - GroundClearance) * 0.65;
+    OutResult.Location.Z += Lift;
 
     const FQuat Orientation = OutResult.Rotation.Quaternion();
     const double TanHorizontal = FMath::Tan(FMath::DegreesToRadians(OutResult.FOV * 0.5));
@@ -35,6 +40,21 @@ void UTrainingCameraComponent::GetCameraView(float DeltaTime, FMinimalViewInfo& 
         }
     }
     OutResult.Location -= Orientation.GetForwardVector() * Pullback;
+
+    // 构图修正在弹簧臂避障之后发生，最终取景点也要与地面和场景保持相机探针的间距。
+    const auto* Arm = Cast<USpringArmComponent>(GetOwner()->GetRootComponent()->GetAttachParent());
+    if (Arm && Arm->bDoCollisionTest && (Pullback > 0.0 || Lift > 0.0))
+    {
+        const FVector Pivot = Arm->GetComponentLocation() + Arm->TargetOffset;
+        FCollisionQueryParams Query(SCENE_QUERY_STAT(TrainingCameraFraming), false, Character);
+        Query.AddIgnoredActor(GetOwner());
+        FHitResult Hit;
+        if (GetWorld()->SweepSingleByChannel(Hit, Pivot, OutResult.Location, FQuat::Identity,
+                                             Arm->ProbeChannel, FCollisionShape::MakeSphere(Arm->ProbeSize), Query))
+        {
+            OutResult.Location = Hit.Location;
+        }
+    }
 }
 
 // 保留 CameraActor 的视图目标和自动激活行为，使用训练场专用的取景组件。

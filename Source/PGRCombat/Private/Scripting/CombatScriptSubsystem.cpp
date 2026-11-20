@@ -25,6 +25,7 @@ void UCombatScriptSubsystem::Initialize(FSubsystemCollectionBase& Collection)
     {
         UE_LOG(LogPGRScript, Error, TEXT("Puerts bridge startup failed: PGR/main.js did not complete native round trip"));
         ActionResolver.Unbind();
+        NanamiOrbActionStarted.Unbind();
         ScriptEnvironment.Reset();
     }
 }
@@ -32,7 +33,7 @@ void UCombatScriptSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 // 脚本入口执行到末尾时，确认选招委托已绑定后才开放战斗输入。
 void UCombatScriptSubsystem::ConfirmStartup()
 {
-    bScriptReady = ActionResolver.IsBound();
+    bScriptReady = ActionResolver.IsBound() && NanamiOrbActionStarted.IsBound();
 }
 
 // 将输入指令和按键阶段转换为枚举名称，交给脚本解析为动作标识。
@@ -53,6 +54,7 @@ FName UCombatScriptSubsystem::ResolveAction(UCombatComponent* Combat, ECombatCom
 void UCombatScriptSubsystem::Deinitialize()
 {
     ActionResolver.Unbind();
+    NanamiOrbActionStarted.Unbind();
     ScriptEnvironment.Reset();
     bScriptReady = false;
     UE_LOG(LogPGRScript, Display, TEXT("Puerts bridge stopped"));
