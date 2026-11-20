@@ -1,6 +1,6 @@
 import { argv } from "puerts";
 import { CombatComponent, resolveNanamiAction } from "../Combat/Nanami/NanamiRules.js";
-import { NanamiOrbComponent, onRedOrbStarted } from "../Combat/Nanami/RedOrb.js";
+import { NanamiOrbComponent, onOrbStarted } from "../Combat/Nanami/SignalOrb.js";
 
 interface CombatScriptHost {
     ActionResolver: {
@@ -22,5 +22,5 @@ if (!host) {
 
 // 将原生输入委托转发给七实的动作选择规则。
 host.ActionResolver.Bind(resolveNanamiAction);
-host.NanamiOrbActionStarted.Bind(onRedOrbStarted);
+host.NanamiOrbActionStarted.Bind(onOrbStarted);
 host.ConfirmStartup();
