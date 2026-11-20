@@ -13,7 +13,7 @@
 | Git / Git LFS | Git 2.47.1.windows.1，Git LFS 3.6.0。 |
 | 工具脚本与视频 | `py -3 --version` 返回 Python 3.14.7。在本次命令行的 PATH 上未找到 `ffmpeg` 和 `ffprobe`。后续测视频前安装 FFmpeg 并记录实际版本。 |
 | 索引解码 | 两个盘点/类型工具只需 Python 标准库。标准索引工具还需 MessagePack。本机实测 pip 26.2.1 随附的 msgpack 1.1.2。换机可在仓库外虚拟环境安装 `msgpack==1.1.2`，工具优先使用单独安装的包。 |
-| Blender | `blender.exe --version` 返回 4.5.15 LTS。Blender 用户插件 `blender_mcp.py` 声明版本 1.8。本次 Codex 会话可列出 Blender 工具，检查时无运行中的 Blender，尚未验证连接及导出。 |
+| Blender | `blender.exe --version` 返回 4.5.15 LTS。Blender 用户插件 `blender_mcp.py` 声明版本 1.8。检查时无运行中的 Blender，尚未验证连接及导出。 |
 
 UE 插件版本取自同一引擎安装中的 `.uplugin`。
 
@@ -37,7 +37,6 @@ Start-Process $editor -ArgumentList @("`"$project`"", '-RenderOffScreen', '-NoSp
 Get-NetTCPConnection -State Listen -LocalPort 18475
 ```
 
-Codex 客户端名称为 `pgr_unreal`。换机时从仓库根目录打开项目，在自己信任此克隆的前提下加载仓库中的 `.codex/config.toml`。本机的 Codex 工作区开在仓库上一级，已在该工作区单独登记相同端点。新会话读入配置后，可先调用 `list_toolsets`，再用 `call_tool` 调用 `editor_toolset.toolsets.scene.SceneTools` 的 `get_current_level`，默认地图应返回 `/Game/Maps/Training/TrainingFighter/L_CombatTraining`。
 
 2026-11-19 从本机独立 UE 编辑器完成 HTTP MCP 握手（协议 `2025-06-18`），发现 19 个工具集。读取当前地图成功，`AssetTools.get_asset_class` 返回 `AM_NanamiBasic` 的类型 `AnimMontage`；`AssetTools.get_dependencies` 在 `DA_NanamiActions` 的依赖中返回该 Montage。运行第二个编辑器宿主做自动化时，可为第二个进程传入 `-ini:EditorPerProjectUserSettings:[/Script/ModelContextProtocolEngine.ModelContextProtocolSettings]:bAutoStartServer=False`。UE 5.8.4 的 Cook 等命令程序会自动跳过 MCP 自启动。
 
@@ -72,8 +71,8 @@ $game = Join-Path $stage 'Windows/PGRCombat/Binaries/Win64/PGRCombat.exe'
 
 ## 换机与编译
 
-1. 在新机用自己的 GitHub 身份克隆已发布的私有仓库。远端发布状态见 [当前进度](progress.md)。安装 Git LFS 后在克隆目录运行 `git lfs install --local` 和 `git lfs pull`。若尚无可克隆远端，可通过自己的离线介质转移该项目的 Git bundle，见下文。
-2. 阅读根目录 `AGENTS.md`、`docs/progress.md`、`docs/decisions.md`、`docs/validation.md`，按需进入 `docs/research/`。私人录像与原游戏安装独立保管。编译最小 UE 工程无需安装原游戏。
+1. 在新机克隆项目仓库。安装 Git LFS 后在克隆目录运行 `git lfs install --local` 和 `git lfs pull`。若尚无可克隆远端，可通过自己的离线介质转移该项目的 Git bundle，见下文。
+2. 阅读项目的 `docs/validation.md`，按需进入 `docs/research/`。私人录像与原游戏安装独立保管。编译最小 UE 工程无需安装原游戏。
 3. 安装 Epic 的 UE 5.8.4 Win64 发行版与 VS 的“使用 C++ 的游戏开发”工作负载，勾选 v143 x64/x86 工具与 Windows SDK 10.0.22621.0。命令行构建不依赖 Visual Studio 的具体付费版本。使用下列命令核对新安装的 `Build.version`。
 4. 将本机引擎路径赋给当前 PowerShell 会话中的 `UE_ROOT`。它只在本机使用。以 `Build.bat` 和项目文件的显式路径编译，可以在未建立 Windows 双击关联时运行。仓库中的 `EngineAssociation` 为 `5.8`。
 

@@ -62,3 +62,9 @@ LocalGameResources.json
 *.7z
 Thumbs.db
 Desktop.ini
+
+# Local agent configuration and session notes
+.codex/
+AGENTS.md
+/docs/progress.md
+/docs/decisions.md

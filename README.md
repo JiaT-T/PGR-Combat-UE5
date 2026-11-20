@@ -1,14 +1,16 @@
 # PGR Combat UE5
 
+**试玩七实的剑盾四段普攻。** 打开 `/Game/Maps/Training/Nanami/L_NanamiTraining` 并进入游戏，连续点按 **J** 或 **鼠标左键**，依次打出 `Attack01 → Attack02 → Attack03 → Attack04`。第三段抛盾、展剑；第四段跃起下劈，收刀时盾回手。四段按原速播放。[连段验证](docs/validation.md#剑盾四段普攻与武器动作)
+
 **试玩第一段普攻。** 在默认地图 `/Game/Maps/Training/TrainingFighter/L_CombatTraining` 中点击播放，按 **J** 或 **鼠标左键**。TS 为剑盾普攻选择 `Attack01`，角色挥剑并自然收招，随后可再次输入。当前角色与动作是原创占位素材，一次挥击约 0.90 秒。第一次打开工程前请完成下方的插件恢复与 TS 构建。
 
 | 从这里进入 | 内容 |
 |---|---|
-| [当前进度](docs/progress.md) · [验证记录](docs/validation.md) | 已完成、已验证、阻塞与下一项可执行工作 |
+| [验证记录](docs/validation.md) | 已完成、已验证、阻塞与下一项可执行工作 |
 | [客户端盘点](docs/research/client-layout.md) · [对象与类型](docs/research/unity-types.md) · [标准资源索引](docs/research/public-index.md) | 安装位置、版本、普通元数据、反馈资源与复验方法 |
 | [机制证据账本](docs/research/mechanics.md) · [下一阶段测量](docs/research/measurement.md) | 九类战斗问题及证据等级、手动采样与逐帧测量方法 |
-| [UE 架构草案](docs/architecture.md) · [设计决策](docs/decisions.md) | 单机战斗职责、候选框架、决策依据与两周实施顺序 |
-| [换机与构建](docs/environment.md) · [Agent 指令](AGENTS.md) | Git/LFS、引擎与工具版本、复跑命令和每阶段交接要求 |
+| [UE 架构草案](docs/architecture.md) | 单机战斗职责、候选框架、决策依据与两周实施顺序 |
+| [换机与构建](docs/environment.md) | Git/LFS、引擎与工具版本、复跑命令 |
 
 ## 开始工作
 
