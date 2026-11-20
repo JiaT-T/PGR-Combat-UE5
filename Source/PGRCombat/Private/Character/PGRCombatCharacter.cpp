@@ -99,6 +99,10 @@ void APGRCombatCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInput
         Input->BindAction(BasicAttackAction, ETriggerEvent::Completed, this, &ThisClass::OnBasicAttackReleased);
         Input->BindAction(BasicAttackAction, ETriggerEvent::Canceled, this, &ThisClass::OnBasicAttackCanceled);
     }
+    if (Input && RedOrbAction)
+    {
+        Input->BindAction(RedOrbAction, ETriggerEvent::Started, this, &ThisClass::OnRedOrbPressed);
+    }
 }
 
 // 向战斗组件提交一次普攻按下指令。
@@ -117,4 +121,10 @@ void APGRCombatCharacter::OnBasicAttackReleased()
 void APGRCombatCharacter::OnBasicAttackCanceled()
 {
     Combat->SubmitInput(ECombatCommand::BasicAttack, ECombatInputPhase::Canceled);
+}
+
+// 只在按键起手时提交红球，长按到松开算一次输入。
+void APGRCombatCharacter::OnRedOrbPressed()
+{
+    Combat->SubmitInput(ECombatCommand::RedOrb, ECombatInputPhase::Pressed);
 }

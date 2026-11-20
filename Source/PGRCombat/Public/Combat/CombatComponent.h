@@ -52,6 +52,8 @@ private:
     TObjectPtr<UCombatMotionComponent> Motion = nullptr;
 
     FName ActiveActionId = NAME_None;
+    // 只在实例活动期间读取，区分同一指令的续段与高优先级技能打断。
+    ECombatCommand ActiveCommand = ECombatCommand::BasicAttack;
     int64 ActiveInstanceId = 0;
     int64 LastInstanceId = 0;
     bool bEndingPlay = false;

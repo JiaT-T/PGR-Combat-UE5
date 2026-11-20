@@ -23,7 +23,7 @@ void UCombatComponent::EndPlay(const EEndPlayReason::Type Reason)
     Super::EndPlay(Reason);
 }
 
-// 请脚本按输入选招；空闲时直接起手，动作中只在衔接窗口受理下一段。
+// 按脚本选招，区分同类动作的窗口内衔接与红球对普攻的直接打断。
 ECombatInputResult UCombatComponent::SubmitInput(ECombatCommand Command, ECombatInputPhase Phase)
 {
     UGameInstance* Game = GetWorld() ? GetWorld()->GetGameInstance() : nullptr;
@@ -39,18 +39,22 @@ ECombatInputResult UCombatComponent::SubmitInput(ECombatCommand Command, ECombat
         return ECombatInputResult::Ignored;
     }
 
-    if (ActiveInstanceId != 0 &&
-        (Command != ECombatCommand::BasicAttack || Phase != ECombatInputPhase::Pressed || !Motion->IsInputBufferOpen()))
+    const bool bInterruptsBasicAttack = ActiveCommand == ECombatCommand::BasicAttack && Command == ECombatCommand::RedOrb;
+    if (ActiveInstanceId != 0)
     {
-        NotifyAction(ActionId, 0, ECombatActionEvent::Rejected);
-        return ECombatInputResult::Rejected;
+        const bool bCanChain = Command == ActiveCommand && Motion->IsInputBufferOpen();
+        if (Phase != ECombatInputPhase::Pressed || !(bInterruptsBasicAttack || bCanChain))
+        {
+            NotifyAction(ActionId, 0, ECombatActionEvent::Rejected);
+            return ECombatInputResult::Rejected;
+        }
     }
 
     const int64 PreviousInstanceId = ActiveInstanceId;
     const FName PreviousActionId = ActiveActionId;
     const int64 InstanceId = ++LastInstanceId;
     const FOnMontageEnded Ended = FOnMontageEnded::CreateUObject(this, &UCombatComponent::OnMontageEnded, InstanceId);
-    if (!Motion->PlayAction(ActionId, Ended))
+    if (!Motion->PlayAction(ActionId, Command, Ended))
     {
         NotifyAction(ActionId, InstanceId, ECombatActionEvent::Rejected);
         return ECombatInputResult::Rejected;
@@ -58,9 +62,11 @@ ECombatInputResult UCombatComponent::SubmitInput(ECombatCommand Command, ECombat
 
     ActiveInstanceId = InstanceId;
     ActiveActionId = ActionId;
+    ActiveCommand = Command;
     if (PreviousInstanceId != 0)
     {
-        NotifyAction(PreviousActionId, PreviousInstanceId, ECombatActionEvent::Chained);
+        const ECombatActionEvent Event = bInterruptsBasicAttack ? ECombatActionEvent::Interrupted : ECombatActionEvent::Chained;
+        NotifyAction(PreviousActionId, PreviousInstanceId, Event);
     }
 
     // 续段通知的监听者可以打断新实例，此时不能再广播过期的起手。

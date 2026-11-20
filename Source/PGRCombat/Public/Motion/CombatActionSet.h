@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Combat/CombatTypes.h"
 #include "Engine/DataAsset.h"
 #include "CombatActionSet.generated.h"
 
@@ -9,6 +10,10 @@ USTRUCT(BlueprintType)
 struct PGRCOMBAT_API FCombatActionDefinition
 {
     GENERATED_BODY()
+
+    // 已有普攻数据沿用默认指令，技能条目显式选择自身的输入。
+    UPROPERTY(EditAnywhere, Category = "Input")
+    ECombatCommand Command = ECombatCommand::BasicAttack;
 
     UPROPERTY(EditAnywhere, Category = "Animation")
     TObjectPtr<UAnimMontage> Montage = nullptr;

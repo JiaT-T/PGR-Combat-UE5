@@ -40,6 +40,8 @@ private:
     void OnBasicAttackReleased();
     // 处理触发条件尚未满足就结束的普攻输入。
     void OnBasicAttackCanceled();
+    // 提交一次红球按下指令。
+    void OnRedOrbPressed();
 
     UPROPERTY(VisibleAnywhere, Category = "Combat")
     TObjectPtr<UCombatComponent> Combat;
@@ -52,6 +54,9 @@ private:
 
     UPROPERTY(EditDefaultsOnly, Category = "Combat|Input")
     TObjectPtr<UInputAction> BasicAttackAction;
+
+    UPROPERTY(EditDefaultsOnly, Category = "Combat|Input")
+    TObjectPtr<UInputAction> RedOrbAction;
 
     UPROPERTY(EditDefaultsOnly, Category = "Combat|Presentation")
     TObjectPtr<USkeletalMesh> FighterMesh;

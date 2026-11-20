@@ -10,9 +10,13 @@ namespace puerts
 }
 
 class UCombatComponent;
+class UNanamiOrbComponent;
 
 DECLARE_DYNAMIC_DELEGATE_RetVal_ThreeParams(
     FName, FResolveCombatAction, UCombatComponent*, Combat, const FString&, Command, const FString&, Phase);
+
+DECLARE_DYNAMIC_DELEGATE_ThreeParams(
+    FNanamiOrbActionStarted, UNanamiOrbComponent*, Orbs, FName, ActionId, int64, InstanceId);
 
 UCLASS()
 class PGRCOMBAT_API UCombatScriptSubsystem : public UGameInstanceSubsystem
@@ -30,6 +34,9 @@ public:
 
     UPROPERTY()
     FResolveCombatAction ActionResolver;
+
+    UPROPERTY()
+    FNanamiOrbActionStarted NanamiOrbActionStarted;
 
     // 接收脚本的启动回执并校验选招入口。
     UFUNCTION()
