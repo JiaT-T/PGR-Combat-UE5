@@ -6,6 +6,11 @@ declare module "puerts" {
 }
 
 declare module "ue" {
+    export enum ENanamiOrbColor {
+        Red,
+        Blue,
+    }
+
     export const NanamiOrbComponent: {
         // 获取 UE 注册的组件类型以查询当前角色的实例。
         StaticClass(): unknown;

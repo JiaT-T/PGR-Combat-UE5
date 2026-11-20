@@ -88,7 +88,7 @@ void APGRCombatCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
     Super::EndPlay(EndPlayReason);
 }
 
-// 绑定普攻的三个输入阶段，并在红球按下时提交输入。
+// 绑定普攻的三个输入阶段，并在红、蓝球按下时提交输入。
 void APGRCombatCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
     Super::SetupPlayerInputComponent(PlayerInputComponent);
@@ -98,6 +98,10 @@ void APGRCombatCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInput
         Input->BindAction(BasicAttackAction, ETriggerEvent::Started, this, &ThisClass::OnBasicAttackPressed);
         Input->BindAction(BasicAttackAction, ETriggerEvent::Completed, this, &ThisClass::OnBasicAttackReleased);
         Input->BindAction(BasicAttackAction, ETriggerEvent::Canceled, this, &ThisClass::OnBasicAttackCanceled);
+    }
+    if (Input && BlueOrbAction)
+    {
+        Input->BindAction(BlueOrbAction, ETriggerEvent::Started, this, &ThisClass::OnBlueOrbPressed);
     }
     if (Input && RedOrbAction)
     {
@@ -127,4 +131,10 @@ void APGRCombatCharacter::OnBasicAttackCanceled()
 void APGRCombatCharacter::OnRedOrbPressed()
 {
     Combat->SubmitInput(ECombatCommand::RedOrb, ECombatInputPhase::Pressed);
+}
+
+// 按下当帧提交一次蓝球指令。
+void APGRCombatCharacter::OnBlueOrbPressed()
+{
+    Combat->SubmitInput(ECombatCommand::BlueOrb, ECombatInputPhase::Pressed);
 }

@@ -7,7 +7,8 @@ UENUM(BlueprintType)
 enum class ECombatCommand : uint8
 {
     BasicAttack,
-    RedOrb
+    RedOrb,
+    BlueOrb
 };
 
 UENUM(BlueprintType)

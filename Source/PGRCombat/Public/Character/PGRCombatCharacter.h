@@ -26,7 +26,7 @@ public:
 protected:
     // 在组件就绪后应用角色的表现配置。
     void PostInitializeComponents() override;
-    // 将普攻和红球的按键事件连接到战斗逻辑。
+    // 将普攻和红、蓝球的按键事件连接到战斗逻辑。
     void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
     // 角色离开世界时收回战斗输入。
     void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
@@ -42,6 +42,8 @@ private:
     void OnBasicAttackCanceled();
     // 提交一次红球按下指令。
     void OnRedOrbPressed();
+    // 提交一次蓝球按下输入。
+    void OnBlueOrbPressed();
 
     UPROPERTY(VisibleAnywhere, Category = "Combat")
     TObjectPtr<UCombatComponent> Combat;
@@ -57,6 +59,9 @@ private:
 
     UPROPERTY(EditDefaultsOnly, Category = "Combat|Input")
     TObjectPtr<UInputAction> RedOrbAction;
+
+    UPROPERTY(EditDefaultsOnly, Category = "Combat|Input")
+    TObjectPtr<UInputAction> BlueOrbAction;
 
     UPROPERTY(EditDefaultsOnly, Category = "Combat|Presentation")
     TObjectPtr<USkeletalMesh> FighterMesh;

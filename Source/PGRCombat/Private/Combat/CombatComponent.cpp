@@ -7,6 +7,15 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogPGRCombat, Log, All);
 
+namespace
+{
+    // 红蓝球共用技能衔接窗口，其他指令保留各自的打断规则。
+    bool IsSignalOrb(ECombatCommand Command)
+    {
+        return Command == ECombatCommand::RedOrb || Command == ECombatCommand::BlueOrb;
+    }
+}
+
 // 接受战斗输入前，从同一角色取得动作播放组件。
 void UCombatComponent::BeginPlay()
 {
@@ -41,11 +50,12 @@ ECombatInputResult UCombatComponent::SubmitInput(ECombatCommand Command, ECombat
 
     if (ActiveInstanceId != 0)
     {
-        if (Phase == ECombatInputPhase::Pressed && Command != ActiveCommand)
+        if (Phase == ECombatInputPhase::Pressed && ActiveCommand == ECombatCommand::BasicAttack && Command != ActiveCommand)
         {
             return TryInterruptBasicAttack(Command, ActionId);
         }
-        if (Phase != ECombatInputPhase::Pressed || !Motion->IsInputBufferOpen())
+        const bool bCanChain = Command == ActiveCommand || (IsSignalOrb(Command) && IsSignalOrb(ActiveCommand));
+        if (Phase != ECombatInputPhase::Pressed || !bCanChain || !Motion->IsInputBufferOpen())
         {
             NotifyAction(ActionId, 0, ECombatActionEvent::Rejected);
             return ECombatInputResult::Rejected;
@@ -57,7 +67,7 @@ ECombatInputResult UCombatComponent::SubmitInput(ECombatCommand Command, ECombat
 // 检查替换指令能否打断普攻，符合条件时由新动作接管实例。
 ECombatInputResult UCombatComponent::TryInterruptBasicAttack(ECombatCommand Command, FName ActionId)
 {
-    if (ActiveCommand != ECombatCommand::BasicAttack || Command != ECombatCommand::RedOrb)
+    if (ActiveCommand != ECombatCommand::BasicAttack || !IsSignalOrb(Command))
     {
         NotifyAction(ActionId, 0, ECombatActionEvent::Rejected);
         return ECombatInputResult::Rejected;

@@ -7,6 +7,13 @@
 class UCombatComponent;
 class UCombatScriptSubsystem;
 
+UENUM(BlueprintType)
+enum class ENanamiOrbColor : uint8
+{
+    Red,
+    Blue
+};
+
 USTRUCT(BlueprintType)
 struct PGRCOMBAT_API FNanamiOrbState
 {
@@ -48,14 +55,14 @@ public:
     UFUNCTION(BlueprintPure, Category = "Orbs")
     FNanamiOrbState GetOrbState() const { return OrbState; }
 
-    // 返回训练场为普通红二段预置的同色组大小，实际原作选组策略待验证。
+    // 返回训练场为普通二段预置的同色组大小，实际原作选组策略待验证。
     UFUNCTION(BlueprintPure, Category = "Orbs")
-    int32 GetTrainingRedGroupSize() const { return TrainingRedGroupSize; }
+    int32 GetTrainingGroupSize(ENanamiOrbColor Color) const;
 
-    // 将脚本计算出的红球结算一次应用到仍有效的动作实例。
+    // 将脚本计算出的信号球结算一次应用到仍有效的动作实例。
     UFUNCTION()
-    void ApplyRedOrbResult(int64 InstanceId, int32 SpentOrbs, int32 EffectivePings, int32 SpentStars,
-                           bool bFollowUp, bool bTriplePing);
+    void ApplyOrbResult(int64 InstanceId, ENanamiOrbColor Color, int32 SpentOrbs, int32 EffectivePings, int32 SpentStars,
+                        bool bFollowUp, bool bTriplePing);
 
     UPROPERTY(BlueprintAssignable, Category = "Orbs")
     FNanamiOrbStateChanged OnOrbStateChanged;
@@ -90,6 +97,20 @@ private:
     UPROPERTY(Transient)
     TObjectPtr<UCombatScriptSubsystem> ScriptHost;
 
+    UPROPERTY(EditAnywhere, Category = "Training|Orbs", meta = (ClampMin = "1", ClampMax = "3"))
+    int32 TrainingBlueGroupSize = 3;
+
+    // GP 录像中红蓝各自约三秒到期，使用游戏时间以跟随暂停。
+    UPROPERTY(EditDefaultsOnly, Category = "Orbs", meta = (ClampMin = "0.01"))
+    float FollowUpDuration = 3.f;
+
+    // 刷新指定颜色的二段图标及其独立期限。
+    void SetFollowUp(ENanamiOrbColor Color, bool bEnabled);
+    // 到期只归还对应颜色，再刷新 HUD。
+    void ExpireFollowUp(ENanamiOrbColor Color);
+
+    FTimerHandle RedFollowUpTimer;
+    FTimerHandle BlueFollowUpTimer;
     FNanamiOrbState OrbState;
     int64 LastAppliedInstanceId = 0;
 };

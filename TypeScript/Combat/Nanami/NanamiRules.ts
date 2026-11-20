@@ -1,6 +1,6 @@
 import { resolveBasicAttack } from "./BasicAttack.js";
-import { NanamiOrbComponent as OrbComponentClass } from "ue";
-import { NanamiOrbComponent, resolveRedOrb } from "./RedOrb.js";
+import { ENanamiOrbColor, NanamiOrbComponent as OrbComponentClass } from "ue";
+import { NanamiOrbComponent, resolveSignalOrb } from "./SignalOrb.js";
 
 export interface CombatComponent {
     // 读取角色此刻正在播放的动作，空闲时 UE 返回 None。
@@ -18,9 +18,10 @@ export function resolveNanamiAction(combat: CombatComponent, command: string, ph
         return resolveBasicAttack(phase, combat.GetActiveActionId());
     }
 
-    if (command === "RedOrb" && phase === "Pressed") {
+    if ((command === "RedOrb" || command === "BlueOrb") && phase === "Pressed") {
         const orbs = combat.GetOwner().GetComponentByClass(OrbComponentClass.StaticClass());
-        return resolveRedOrb(orbs?.GetOrbState());
+        const color = command === "RedOrb" ? ENanamiOrbColor.Red : ENanamiOrbColor.Blue;
+        return resolveSignalOrb(orbs?.GetOrbState(), color);
     }
 
     return "";
