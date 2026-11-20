@@ -11,7 +11,11 @@ bool UCombatMotionComponent::PlayAction(FName ActionId, FOnMontageEnded OnEnded)
     const FCombatActionDefinition* Action = ActionSet ? ActionSet->Actions.Find(ActionId) : nullptr;
     const ACharacter* Character = Cast<ACharacter>(GetOwner());
     UAnimInstance* AnimInstance = Character && Character->GetMesh() ? Character->GetMesh()->GetAnimInstance() : nullptr;
-    if (!Action || !Action->Montage || !AnimInstance || !FMath::IsFinite(Action->PlayRate) || Action->PlayRate <= 0.0f)
+    if (!Action || !Action->Montage || !AnimInstance)
+    {
+        return false;
+    }
+    if (!FMath::IsFinite(Action->PlayRate) || Action->PlayRate <= 0.0f)
     {
         return false;
     }

@@ -31,16 +31,11 @@ public:
     UPROPERTY()
     FResolveCombatAction ActionResolver;
 
-    // 读取当前脚本启动所需的校验令牌。
-    UFUNCTION()
-    FString GetStartupToken() const;
-
     // 接收脚本的启动回执并校验选招入口。
     UFUNCTION()
-    void ConfirmStartup(const FString& Reply);
+    void ConfirmStartup();
 
 private:
     TSharedPtr<puerts::FScriptEnv> ScriptEnvironment;
-    FString StartupToken;
     bool bScriptReady = false;
 };

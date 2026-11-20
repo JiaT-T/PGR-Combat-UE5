@@ -13,7 +13,8 @@ UENUM(BlueprintType)
 enum class ECombatInputPhase : uint8
 {
     Pressed,
-    Released
+    Released,
+    Canceled
 };
 
 UENUM(BlueprintType)

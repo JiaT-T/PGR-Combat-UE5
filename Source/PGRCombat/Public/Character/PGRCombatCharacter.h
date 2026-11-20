@@ -36,8 +36,10 @@ private:
     void RemoveCombatMapping();
     // 处理普攻按键起手。
     void OnBasicAttackPressed();
-    // 处理普攻按键松开或取消。
+    // 处理已经触发的普攻输入结束。
     void OnBasicAttackReleased();
+    // 处理触发条件尚未满足就结束的普攻输入。
+    void OnBasicAttackCanceled();
 
     UPROPERTY(VisibleAnywhere, Category = "Combat")
     TObjectPtr<UCombatComponent> Combat;

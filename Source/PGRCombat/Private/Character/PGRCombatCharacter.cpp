@@ -87,7 +87,7 @@ void APGRCombatCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
     Super::EndPlay(EndPlayReason);
 }
 
-// 绑定普攻按下、松开和取消事件，将取消按松开处理。
+// 将普攻开始、正常结束和取消分别绑定到对应的输入阶段。
 void APGRCombatCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
     Super::SetupPlayerInputComponent(PlayerInputComponent);
@@ -96,7 +96,7 @@ void APGRCombatCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInput
     {
         Input->BindAction(BasicAttackAction, ETriggerEvent::Started, this, &ThisClass::OnBasicAttackPressed);
         Input->BindAction(BasicAttackAction, ETriggerEvent::Completed, this, &ThisClass::OnBasicAttackReleased);
-        Input->BindAction(BasicAttackAction, ETriggerEvent::Canceled, this, &ThisClass::OnBasicAttackReleased);
+        Input->BindAction(BasicAttackAction, ETriggerEvent::Canceled, this, &ThisClass::OnBasicAttackCanceled);
     }
 }
 
@@ -110,4 +110,10 @@ void APGRCombatCharacter::OnBasicAttackPressed()
 void APGRCombatCharacter::OnBasicAttackReleased()
 {
     Combat->SubmitInput(ECombatCommand::BasicAttack, ECombatInputPhase::Released);
+}
+
+// 保留输入取消的语义，供脚本区分取消与正常松开。
+void APGRCombatCharacter::OnBasicAttackCanceled()
+{
+    Combat->SubmitInput(ECombatCommand::BasicAttack, ECombatInputPhase::Canceled);
 }
