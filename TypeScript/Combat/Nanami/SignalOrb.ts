@@ -1,3 +1,5 @@
+import { ENanamiOrbColor } from "ue";
+
 export interface OrbState {
     readonly RedStock: number;
     readonly BlueStock: number;
@@ -12,47 +14,65 @@ export interface NanamiOrbComponent {
     // 读取当前角色信号球数据的一份快照。
     GetOrbState(): OrbState;
     // 读取训练场样例中普通二段所选同色组的大小。
-    GetTrainingGroupSize(blue: boolean): number;
+    GetTrainingGroupSize(color: ENanamiOrbColor): number;
     // 将本次动作的实际支出、有效消球档位和下一状态一起提交。
-    ApplyOrbResult(instanceId: bigint, blue: boolean, spentOrbs: number, effectivePings: number, spentStars: number,
+    ApplyOrbResult(instanceId: bigint, color: ENanamiOrbColor, spentOrbs: number, effectivePings: number, spentStars: number,
                       followUp: boolean, triplePing: boolean): void;
 }
 
+const redOrb = {
+    color: ENanamiOrbColor.Red,
+    opening: "Attack11",
+    followUp: "Attack12",
+    stockKey: "RedStock",
+    followUpKey: "bRedFollowUp",
+    triplePingKey: "bRedTriplePing",
+} as const;
+
+const blueOrb = {
+    color: ENanamiOrbColor.Blue,
+    opening: "Attack21",
+    followUp: "Attack22",
+    stockKey: "BlueStock",
+    followUpKey: "bBlueFollowUp",
+    triplePingKey: "bBlueTriplePing",
+} as const;
+
+const signalOrbs = [redOrb, blueOrb] as const;
+
 // 按输入颜色及该色独立的二段资格选招。库存为零时连一段也不能发动。
-export function resolveSignalOrb(state: OrbState | undefined, blue: boolean): string {
-    if (!state || (blue ? state.BlueStock : state.RedStock) === 0) {
+export function resolveSignalOrb(state: OrbState | undefined, color: ENanamiOrbColor): string {
+    const orb = signalOrbs.find(candidate => candidate.color === color);
+    if (!orb || !state || state[orb.stockKey] < 1) {
         return "";
     }
-    if (blue) {
-        return state.bBlueFollowUp ? "Attack22" : "Attack21";
-    }
-    return state.bRedFollowUp ? "Attack12" : "Attack11";
+    return state[orb.followUpKey] ? orb.followUp : orb.opening;
 }
 
-// 只结算已确认起播的红蓝技能，普攻与其他动作不改变球态。
+// 两种颜色分别按各自的一、二段动作匹配，其他动作跳过信号球结算。
 export function onOrbStarted(orbs: NanamiOrbComponent, actionId: string, instanceId: bigint): void {
     const action = actionId.toLowerCase();
-    const blue = action === "attack21" || action === "attack22";
-    if (!blue && action !== "attack11" && action !== "attack12") {
+    const orb = signalOrbs.find(candidate =>
+        candidate.opening.toLowerCase() === action || candidate.followUp.toLowerCase() === action);
+    if (!orb) {
         return;
     }
 
     const state = orbs.GetOrbState();
-    const triple = blue ? state.bBlueTriplePing : state.bRedTriplePing;
-    if (action === "attack11" || action === "attack21") {
-        orbs.ApplyOrbResult(instanceId, blue, 0, 0, 0, true, triple);
+    const triple = state[orb.triplePingKey];
+    if (action === orb.opening.toLowerCase()) {
+        orbs.ApplyOrbResult(instanceId, orb.color, 0, 0, 0, true, triple);
         return;
     }
 
-    const stock = blue ? state.BlueStock : state.RedStock;
-    const followUp = blue ? state.bBlueFollowUp : state.bRedFollowUp;
-    if (!followUp || stock < 1) {
+    const stock = state[orb.stockKey];
+    if (!state[orb.followUpKey] || stock < 1) {
         return;
     }
 
-    const spent = triple ? 1 : Math.min(stock, orbs.GetTrainingGroupSize(blue));
+    const spent = triple ? 1 : Math.min(stock, orbs.GetTrainingGroupSize(orb.color));
     const spentStars = Math.min(1, state.Stars);
     // GP 中零星且耗光本色库存时，图标又显示约三秒；零库存始终拒绝输入。
     const keepIcon = state.Stars > spentStars || (spentStars === 0 && spent === stock);
-    orbs.ApplyOrbResult(instanceId, blue, spent, triple ? 3 : spent, spentStars, keepIcon, false);
+    orbs.ApplyOrbResult(instanceId, orb.color, spent, triple ? 3 : spent, spentStars, keepIcon, false);
 }

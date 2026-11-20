@@ -7,6 +7,13 @@
 class UCombatComponent;
 class UCombatScriptSubsystem;
 
+UENUM(BlueprintType)
+enum class ENanamiOrbColor : uint8
+{
+    Red,
+    Blue
+};
+
 USTRUCT(BlueprintType)
 struct PGRCOMBAT_API FNanamiOrbState
 {
@@ -50,12 +57,12 @@ public:
 
     // 返回训练场为普通二段预置的同色组大小，实际原作选组策略待验证。
     UFUNCTION(BlueprintPure, Category = "Orbs")
-    int32 GetTrainingGroupSize(bool bBlue) const { return bBlue ? TrainingBlueGroupSize : TrainingRedGroupSize; }
+    int32 GetTrainingGroupSize(ENanamiOrbColor Color) const;
 
     // 将脚本计算出的信号球结算一次应用到仍有效的动作实例。
     UFUNCTION()
-    void ApplyOrbResult(int64 InstanceId, bool bBlue, int32 SpentOrbs, int32 EffectivePings, int32 SpentStars,
-                           bool bFollowUp, bool bTriplePing);
+    void ApplyOrbResult(int64 InstanceId, ENanamiOrbColor Color, int32 SpentOrbs, int32 EffectivePings, int32 SpentStars,
+                        bool bFollowUp, bool bTriplePing);
 
     UPROPERTY(BlueprintAssignable, Category = "Orbs")
     FNanamiOrbStateChanged OnOrbStateChanged;
@@ -98,9 +105,9 @@ private:
     float FollowUpDuration = 3.f;
 
     // 刷新指定颜色的二段图标及其独立期限。
-    void SetFollowUp(bool bBlue, bool bEnabled);
+    void SetFollowUp(ENanamiOrbColor Color, bool bEnabled);
     // 到期只归还对应颜色，再刷新 HUD。
-    void ExpireFollowUp(bool bBlue);
+    void ExpireFollowUp(ENanamiOrbColor Color);
 
     FTimerHandle RedFollowUpTimer;
     FTimerHandle BlueFollowUpTimer;

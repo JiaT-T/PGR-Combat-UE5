@@ -51,54 +51,104 @@ void UNanamiOrbComponent::OnCombatActionChanged(FName ActionId, int64 InstanceId
     }
 }
 
-// 校验实例和支出后一起发布新状态；三消结算数与实际扣除的库存分别记录。
-void UNanamiOrbComponent::ApplyOrbResult(int64 InstanceId, bool bBlue, int32 SpentOrbs, int32 EffectivePings, int32 SpentStars,
-                                         bool bFollowUp, bool bTriplePing)
+// 按信号球颜色读取训练场的同色组大小。
+int32 UNanamiOrbComponent::GetTrainingGroupSize(ENanamiOrbColor Color) const
 {
-    int32& Stock = bBlue ? OrbState.BlueStock : OrbState.RedStock;
+    switch (Color)
+    {
+    case ENanamiOrbColor::Red:
+        return TrainingRedGroupSize;
+    case ENanamiOrbColor::Blue:
+        return TrainingBlueGroupSize;
+    default:
+        return 0;
+    }
+}
+
+// 校验实例和支出后一起发布新状态；三消结算数与实际扣除的库存分别记录。
+void UNanamiOrbComponent::ApplyOrbResult(int64 InstanceId, ENanamiOrbColor Color, int32 SpentOrbs, int32 EffectivePings,
+                                         int32 SpentStars, bool bFollowUp, bool bTriplePing)
+{
     if (!Combat || Combat->GetActiveInstanceId() != InstanceId || InstanceId <= LastAppliedInstanceId
-        || !FMath::IsWithinInclusive(SpentOrbs, 0, Stock) || !FMath::IsWithinInclusive(EffectivePings, 0, 3)
+        || SpentOrbs < 0 || !FMath::IsWithinInclusive(EffectivePings, 0, 3)
         || !FMath::IsWithinInclusive(SpentStars, 0, OrbState.Stars))
     {
         return;
     }
 
+    switch (Color)
+    {
+    case ENanamiOrbColor::Red:
+        if (SpentOrbs > OrbState.RedStock)
+        {
+            return;
+        }
+        OrbState.RedStock -= SpentOrbs;
+        OrbState.bRedTriplePing = bTriplePing;
+        break;
+    case ENanamiOrbColor::Blue:
+        if (SpentOrbs > OrbState.BlueStock)
+        {
+            return;
+        }
+        OrbState.BlueStock -= SpentOrbs;
+        OrbState.bBlueTriplePing = bTriplePing;
+        break;
+    default:
+        return;
+    }
+
     LastAppliedInstanceId = InstanceId;
-    Stock -= SpentOrbs;
     OrbState.Stars -= SpentStars;
-    (bBlue ? OrbState.bBlueTriplePing : OrbState.bRedTriplePing) = bTriplePing;
-    SetFollowUp(bBlue, bFollowUp);
     // 使用亮星结算二段时，两色同时获得续段，或在最后一星耗尽时一起回退。
     if (SpentStars > 0)
     {
-        SetFollowUp(!bBlue, bFollowUp);
+        SetFollowUp(ENanamiOrbColor::Red, bFollowUp);
+        SetFollowUp(ENanamiOrbColor::Blue, bFollowUp);
+    }
+    else
+    {
+        SetFollowUp(Color, bFollowUp);
     }
 
     UE_LOG(LogNanamiOrbs, Display, TEXT("%s orb instance=%lld spent=%d pings=%d red=%d blue=%d stars=%d redFollow=%d blueFollow=%d"),
-           bBlue ? TEXT("Blue") : TEXT("Red"), InstanceId, SpentOrbs, EffectivePings,
+           *StaticEnum<ENanamiOrbColor>()->GetNameStringByValue(static_cast<int64>(Color)), InstanceId, SpentOrbs, EffectivePings,
            OrbState.RedStock, OrbState.BlueStock, OrbState.Stars, OrbState.bRedFollowUp, OrbState.bBlueFollowUp);
     OnOrbStateChanged.Broadcast(OrbState);
 }
 
 // 每色独立计时；刷新一种颜色不会推迟另一种颜色自然到期。
-void UNanamiOrbComponent::SetFollowUp(bool bBlue, bool bEnabled)
+void UNanamiOrbComponent::SetFollowUp(ENanamiOrbColor Color, bool bEnabled)
 {
-    (bBlue ? OrbState.bBlueFollowUp : OrbState.bRedFollowUp) = bEnabled;
-    FTimerHandle& Timer = bBlue ? BlueFollowUpTimer : RedFollowUpTimer;
+    FTimerHandle* Timer;
+    switch (Color)
+    {
+    case ENanamiOrbColor::Red:
+        OrbState.bRedFollowUp = bEnabled;
+        Timer = &RedFollowUpTimer;
+        break;
+    case ENanamiOrbColor::Blue:
+        OrbState.bBlueFollowUp = bEnabled;
+        Timer = &BlueFollowUpTimer;
+        break;
+    default:
+        return;
+    }
+
     FTimerManager& Timers = GetWorld()->GetTimerManager();
     if (bEnabled)
     {
-        Timers.SetTimer(Timer, FTimerDelegate::CreateUObject(this, &ThisClass::ExpireFollowUp, bBlue), FollowUpDuration, false);
+        Timers.SetTimer(*Timer, FTimerDelegate::CreateUObject(this, &ThisClass::ExpireFollowUp, Color), FollowUpDuration, false);
     }
     else
     {
-        Timers.ClearTimer(Timer);
+        Timers.ClearTimer(*Timer);
     }
 }
 
-// 二段计时结束后更新 HUD，库存和已有星数保留。
-void UNanamiOrbComponent::ExpireFollowUp(bool bBlue)
+// 到期时按回调携带的颜色收回该色二段，并通知 HUD。
+void UNanamiOrbComponent::ExpireFollowUp(ENanamiOrbColor Color)
 {
-    (bBlue ? OrbState.bBlueFollowUp : OrbState.bRedFollowUp) = false;
+    SetFollowUp(Color, false);
     OnOrbStateChanged.Broadcast(OrbState);
 }

@@ -1,5 +1,5 @@
 import { resolveBasicAttack } from "./BasicAttack.js";
-import { NanamiOrbComponent as OrbComponentClass } from "ue";
+import { ENanamiOrbColor, NanamiOrbComponent as OrbComponentClass } from "ue";
 import { NanamiOrbComponent, resolveSignalOrb } from "./SignalOrb.js";
 
 export interface CombatComponent {
@@ -20,7 +20,8 @@ export function resolveNanamiAction(combat: CombatComponent, command: string, ph
 
     if ((command === "RedOrb" || command === "BlueOrb") && phase === "Pressed") {
         const orbs = combat.GetOwner().GetComponentByClass(OrbComponentClass.StaticClass());
-        return resolveSignalOrb(orbs?.GetOrbState(), command === "BlueOrb");
+        const color = command === "RedOrb" ? ENanamiOrbColor.Red : ENanamiOrbColor.Blue;
+        return resolveSignalOrb(orbs?.GetOrbState(), color);
     }
 
     return "";
