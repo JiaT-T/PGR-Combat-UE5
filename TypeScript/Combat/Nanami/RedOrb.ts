@@ -24,11 +24,11 @@ export function resolveRedOrb(state: RedOrbState | undefined): string {
     return state.bRedFollowUp ? "Attack12" : "Attack11";
 }
 
-// 收到起播确认后结算当前红球动作，首次二段的白弧只消耗一颗库存。
+// 红一起播只开启续段；红二按角色已有的消球资格结算。
 export function onRedOrbStarted(orbs: NanamiOrbComponent, actionId: string, instanceId: bigint): void {
     switch (actionId.toLowerCase()) {
         case "attack11":
-            orbs.ApplyRedOrbResult(instanceId, 0, 0, 0, true, true);
+            orbs.ApplyRedOrbResult(instanceId, 0, 0, 0, true, orbs.GetOrbState().bRedTriplePing);
             break;
         case "attack12": {
             const state = orbs.GetOrbState();

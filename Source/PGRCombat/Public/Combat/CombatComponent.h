@@ -41,6 +41,11 @@ protected:
     virtual void EndPlay(const EEndPlayReason::Type Reason) override;
 
 private:
+    // 尝试以另一类指令打断当前普攻，仅在新动作成功起播后通知旧实例。
+    ECombatInputResult TryInterruptBasicAttack(ECombatCommand Command, FName ActionId);
+    // 播放选定动作，并用指定事件结算被替换的实例。
+    ECombatInputResult StartAction(ECombatCommand Command, FName ActionId, ECombatActionEvent PreviousEvent);
+
     // 接收指定动作实例的动画结束通知。
     void OnMontageEnded(UAnimMontage* Montage, bool bInterrupted, int64 InstanceId);
     // 结束给定实例并广播本次结算结果。

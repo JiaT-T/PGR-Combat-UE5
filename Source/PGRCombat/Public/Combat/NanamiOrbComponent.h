@@ -5,6 +5,7 @@
 #include "NanamiOrbComponent.generated.h"
 
 class UCombatComponent;
+class UCombatScriptSubsystem;
 
 USTRUCT(BlueprintType)
 struct PGRCOMBAT_API FNanamiOrbState
@@ -12,10 +13,10 @@ struct PGRCOMBAT_API FNanamiOrbState
     GENERATED_BODY()
 
     UPROPERTY(BlueprintReadOnly, Category = "Orbs")
-    int32 RedStock = 5;
+    int32 RedStock = 0;
 
     UPROPERTY(BlueprintReadOnly, Category = "Orbs")
-    int32 BlueStock = 3;
+    int32 BlueStock = 0;
 
     UPROPERTY(BlueprintReadOnly, Category = "Orbs")
     int32 Stars = 0;
@@ -70,6 +71,13 @@ private:
     UFUNCTION()
     void OnCombatActionChanged(FName ActionId, int64 InstanceId, ECombatActionEvent Event);
 
+    // 当前训练用例的起始库存。原作的入场库存规则确认后再提供相应预设。
+    UPROPERTY(EditAnywhere, Category = "Training|Orbs", meta = (ClampMin = "0", ClampMax = "16"))
+    int32 InitialRedStock = 5;
+
+    UPROPERTY(EditAnywhere, Category = "Training|Orbs", meta = (ClampMin = "0", ClampMax = "16"))
+    int32 InitialBlueStock = 3;
+
     UPROPERTY(EditAnywhere, Category = "Training|Orbs", meta = (ClampMin = "0", ClampMax = "2"))
     int32 InitialStars = 0;
 
@@ -78,6 +86,9 @@ private:
 
     UPROPERTY(Transient)
     TObjectPtr<UCombatComponent> Combat;
+
+    UPROPERTY(Transient)
+    TObjectPtr<UCombatScriptSubsystem> ScriptHost;
 
     FNanamiOrbState OrbState;
     int64 LastAppliedInstanceId = 0;

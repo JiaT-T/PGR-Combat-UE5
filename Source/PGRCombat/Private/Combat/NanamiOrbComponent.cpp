@@ -8,15 +8,18 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogNanamiOrbs, Log, All);
 
-// 每个角色从自己的训练初值出发，让 HUD 在初次读取或收到通知时看到相同的状态。
+// 读取本角色的训练预设，并在战斗组件和脚本宿主可用时注册动作回调。
 void UNanamiOrbComponent::BeginPlay()
 {
     Super::BeginPlay();
     OrbState = FNanamiOrbState();
+    OrbState.RedStock = FMath::Clamp(InitialRedStock, 0, MaxStock);
+    OrbState.BlueStock = FMath::Clamp(InitialBlueStock, 0, MaxStock - OrbState.RedStock);
     OrbState.Stars = FMath::Clamp(InitialStars, 0, 2);
     LastAppliedInstanceId = 0;
     Combat = GetOwner()->FindComponentByClass<UCombatComponent>();
-    if (Combat)
+    ScriptHost = UGameInstance::GetSubsystem<UCombatScriptSubsystem>(GetWorld()->GetGameInstance());
+    if (Combat && ScriptHost)
     {
         Combat->OnActionChanged.AddUniqueDynamic(this, &ThisClass::OnCombatActionChanged);
     }
@@ -31,6 +34,7 @@ void UNanamiOrbComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
         Combat->OnActionChanged.RemoveDynamic(this, &ThisClass::OnCombatActionChanged);
         Combat = nullptr;
     }
+    ScriptHost = nullptr;
     Super::EndPlay(EndPlayReason);
 }
 
@@ -40,12 +44,7 @@ void UNanamiOrbComponent::OnCombatActionChanged(FName ActionId, int64 InstanceId
     if (Event == ECombatActionEvent::Started && Combat && Combat->GetActiveInstanceId() == InstanceId
         && InstanceId > LastAppliedInstanceId)
     {
-        const UGameInstance* Game = GetWorld()->GetGameInstance();
-        const auto* Scripts = Game ? Game->GetSubsystem<UCombatScriptSubsystem>() : nullptr;
-        if (Scripts)
-        {
-            Scripts->NanamiOrbActionStarted.ExecuteIfBound(this, ActionId, InstanceId);
-        }
+        ScriptHost->NanamiOrbActionStarted.ExecuteIfBound(this, ActionId, InstanceId);
     }
 }
 

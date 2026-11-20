@@ -88,7 +88,7 @@ void APGRCombatCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
     Super::EndPlay(EndPlayReason);
 }
 
-// 将普攻开始、正常结束和取消分别绑定到对应的输入阶段。
+// 绑定普攻的三个输入阶段，并在红球按下时提交输入。
 void APGRCombatCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
     Super::SetupPlayerInputComponent(PlayerInputComponent);
@@ -123,7 +123,7 @@ void APGRCombatCharacter::OnBasicAttackCanceled()
     Combat->SubmitInput(ECombatCommand::BasicAttack, ECombatInputPhase::Canceled);
 }
 
-// 只在按键起手时提交红球，长按到松开算一次输入。
+// 每次按下红球键立即提交一次输入。
 void APGRCombatCharacter::OnRedOrbPressed()
 {
     Combat->SubmitInput(ECombatCommand::RedOrb, ECombatInputPhase::Pressed);

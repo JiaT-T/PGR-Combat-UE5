@@ -23,7 +23,7 @@ void UCombatComponent::EndPlay(const EEndPlayReason::Type Reason)
     Super::EndPlay(Reason);
 }
 
-// 按脚本选招，区分同类动作的窗口内衔接与红球对普攻的直接打断。
+// 按脚本选招，同类动作检查接续窗口，跨指令输入交给打断规则。
 ECombatInputResult UCombatComponent::SubmitInput(ECombatCommand Command, ECombatInputPhase Phase)
 {
     UGameInstance* Game = GetWorld() ? GetWorld()->GetGameInstance() : nullptr;
@@ -39,17 +39,35 @@ ECombatInputResult UCombatComponent::SubmitInput(ECombatCommand Command, ECombat
         return ECombatInputResult::Ignored;
     }
 
-    const bool bInterruptsBasicAttack = ActiveCommand == ECombatCommand::BasicAttack && Command == ECombatCommand::RedOrb;
     if (ActiveInstanceId != 0)
     {
-        const bool bCanChain = Command == ActiveCommand && Motion->IsInputBufferOpen();
-        if (Phase != ECombatInputPhase::Pressed || !(bInterruptsBasicAttack || bCanChain))
+        if (Phase == ECombatInputPhase::Pressed && Command != ActiveCommand)
+        {
+            return TryInterruptBasicAttack(Command, ActionId);
+        }
+        if (Phase != ECombatInputPhase::Pressed || !Motion->IsInputBufferOpen())
         {
             NotifyAction(ActionId, 0, ECombatActionEvent::Rejected);
             return ECombatInputResult::Rejected;
         }
     }
+    return StartAction(Command, ActionId, ECombatActionEvent::Chained);
+}
 
+// 检查替换指令能否打断普攻，符合条件时由新动作接管实例。
+ECombatInputResult UCombatComponent::TryInterruptBasicAttack(ECombatCommand Command, FName ActionId)
+{
+    if (ActiveCommand != ECombatCommand::BasicAttack || Command != ECombatCommand::RedOrb)
+    {
+        NotifyAction(ActionId, 0, ECombatActionEvent::Rejected);
+        return ECombatInputResult::Rejected;
+    }
+    return StartAction(Command, ActionId, ECombatActionEvent::Interrupted);
+}
+
+// 先尝试起播，再更新当前实例并通知被替换的动作。
+ECombatInputResult UCombatComponent::StartAction(ECombatCommand Command, FName ActionId, ECombatActionEvent PreviousEvent)
+{
     const int64 PreviousInstanceId = ActiveInstanceId;
     const FName PreviousActionId = ActiveActionId;
     const int64 InstanceId = ++LastInstanceId;
@@ -65,11 +83,10 @@ ECombatInputResult UCombatComponent::SubmitInput(ECombatCommand Command, ECombat
     ActiveCommand = Command;
     if (PreviousInstanceId != 0)
     {
-        const ECombatActionEvent Event = bInterruptsBasicAttack ? ECombatActionEvent::Interrupted : ECombatActionEvent::Chained;
-        NotifyAction(PreviousActionId, PreviousInstanceId, Event);
+        NotifyAction(PreviousActionId, PreviousInstanceId, PreviousEvent);
     }
 
-    // 续段通知的监听者可以打断新实例，此时不能再广播过期的起手。
+    // 旧动作的监听者可能打断新实例，起手通知仅发给当前实例。
     if (ActiveInstanceId == InstanceId)
     {
         NotifyAction(ActionId, InstanceId, ECombatActionEvent::Started);
