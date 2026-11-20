@@ -37,7 +37,7 @@ Start-Process $editor -ArgumentList @("`"$project`"", '-RenderOffScreen', '-NoSp
 Get-NetTCPConnection -State Listen -LocalPort 18475
 ```
 
-Codex 客户端名称为 `pgr_unreal`。换机时从仓库根目录打开项目，在自己信任此克隆的前提下加载仓库中的 `.codex/config.toml`。本机的 Codex 工作区开在仓库上一级，已在该工作区单独登记相同端点。新会话读入配置后，可先调用 `list_toolsets`，再用 `call_tool` 调用 `editor_toolset.toolsets.scene.SceneTools` 的 `get_current_level`，默认地图应返回 `/Game/Maps/L_CombatTraining`。
+Codex 客户端名称为 `pgr_unreal`。换机时从仓库根目录打开项目，在自己信任此克隆的前提下加载仓库中的 `.codex/config.toml`。本机的 Codex 工作区开在仓库上一级，已在该工作区单独登记相同端点。新会话读入配置后，可先调用 `list_toolsets`，再用 `call_tool` 调用 `editor_toolset.toolsets.scene.SceneTools` 的 `get_current_level`，默认地图应返回 `/Game/Maps/Training/TrainingFighter/L_CombatTraining`。
 
 2026-11-19 从本机独立 UE 编辑器完成 HTTP MCP 握手（协议 `2025-06-18`），发现 19 个工具集。读取当前地图成功，`AssetTools.get_asset_class` 返回 `AM_NanamiBasic` 的类型 `AnimMontage`；`AssetTools.get_dependencies` 在 `DA_NanamiActions` 的依赖中返回该 Montage。运行第二个编辑器宿主做自动化时，可为第二个进程传入 `-ini:EditorPerProjectUserSettings:[/Script/ModelContextProtocolEngine.ModelContextProtocolSettings]:bAutoStartServer=False`。UE 5.8.4 的 Cook 等命令程序会自动跳过 MCP 自启动。
 
@@ -63,7 +63,7 @@ npm.cmd run build
 $uat = Join-Path $env:UE_ROOT 'Engine/Build/BatchFiles/RunUAT.bat'
 $project = (Resolve-Path './PGRCombat.uproject').Path
 $stage = Join-Path (Get-Location).Path 'StagedBuilds/BasicAttack'
-& $uat BuildCookRun "-project=$project" -nop4 -unattended -utf8output -nocompileeditor -platform=Win64 -clientconfig=Development -build -cook -map=/Game/Maps/L_CombatTraining -stage -pak -iostore -package "-stagingdirectory=$stage" "-additionalcookeroptions=-NoAnalytics -DisablePlugins=AndroidFileServer"
+& $uat BuildCookRun "-project=$project" -nop4 -unattended -utf8output -nocompileeditor -platform=Win64 -clientconfig=Development -build -cook -map=/Game/Maps/Training/TrainingFighter/L_CombatTraining -stage -pak -iostore -package "-stagingdirectory=$stage" "-additionalcookeroptions=-NoAnalytics -DisablePlugins=AndroidFileServer"
 if ($LASTEXITCODE -ne 0) { throw '打包失败，检查 AutomationTool 日志' }
 $game = Join-Path $stage 'Windows/PGRCombat/Binaries/Win64/PGRCombat.exe'
 ./tools/test_puerts.ps1 -PackagedExe $game
@@ -95,7 +95,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Game target 构建失败，请检查 PGRGameBu
 
 ## 重跑启动验证
 
-在同一 PowerShell 会话继续执行。两次都使用编辑器宿主的 `-game` 模式。工程在 `Config/DefaultEngine.ini` 中指定训练地图 `/Game/Maps/L_CombatTraining`。运行进入 Tick 后，`-seconds` 使引擎发出正常退出请求。首次启动和着色器准备可额外耗时。
+在同一 PowerShell 会话继续执行。两次都使用编辑器宿主的 `-game` 模式。工程在 `Config/DefaultEngine.ini` 中指定训练地图 `/Game/Maps/Training/TrainingFighter/L_CombatTraining`。运行进入 Tick 后，`-seconds` 使引擎发出正常退出请求。首次启动和着色器准备可额外耗时。
 
 ```powershell
 $common = @($project, '-game', '-unattended', '-NoSplash', '-NoSound', '-NoAnalytics', '-NoLiveCoding')
@@ -103,7 +103,7 @@ $common = @($project, '-game', '-unattended', '-NoSplash', '-NoSound', '-NoAnaly
 if ($LASTEXITCODE -ne 0) { throw 'Null RHI 启动失败' }
 & $editor @common -d3d12 -windowed -ResX=640 -ResY=360 -seconds=8 "-ABSLOG=$logs/PGRSmokeD3D12.log"
 if ($LASTEXITCODE -ne 0) { throw 'D3D12 启动失败' }
-Get-ChildItem $logs -Filter 'PGRSmoke*.log' | Select-String -Pattern 'verbatimrhiname=|Bringing World /Game/Maps/L_CombatTraining|Engine is initialized|RequestExitWithStatus|LogExit: Exiting'
+Get-ChildItem $logs -Filter 'PGRSmoke*.log' | Select-String -Pattern 'verbatimrhiname=|Bringing World /Game/Maps/Training/TrainingFighter/L_CombatTraining|Engine is initialized|RequestExitWithStatus|LogExit: Exiting'
 ```
 
 两份日志应各自显示预期 RHI（Null 或 D3D12）、地图进入游玩、引擎完成初始化和正常退出。两个编辑器宿主测试均返回 0。首次测试出现 Enhanced Input 本地玩家配置警告，补上 `Config/DefaultInput.ini` 后两种启动都已复测。加入 Puerts 后独立包的结果另见[验证记录](validation.md)。
