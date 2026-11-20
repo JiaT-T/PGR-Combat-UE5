@@ -2,7 +2,7 @@
 
 **2026-11-20 · 首段普攻审查修订。** 普攻输入向 TS 分别传递 `Pressed`、`Released` 与 `Canceled`。脚本在绑定选招回调后调用无参 `ConfirmStartup()`，C++ 确认绑定才接受战斗输入。`PlayAction` 分别校验播放对象和速率。原有 Montage 结束回调及训练场回归继续使用。下阶段用实际输入标定第二段普攻的衔接窗口。[验证记录](validation.md#首段普攻审查修订)
 
-**2026-11-19 · 七实原模型本地训练场。** 默认涂装「泛用式·终」的 108 段角色动画已在 UE 中逐项回读。按资源层和文件名区分同名动作。战斗待机使用 `BaseLayer/Stand2`，剑盾普攻使用 `BaseLayer/Attack01`。本机内容浏览器入口是 `/Game/LocalOnly/NanamiStartrail/L_NanamiTraining`。编辑器 MCP 已开启并实测可调用。下一步用首段末尾的实际姿势和输入响应标定二段衔接窗口。[实测与本地资产迁移](validation.md#七实默认涂装本地实测) · [MCP 环境](environment.md)
+**2026-11-19 · 七实原模型本地训练场。** 默认涂装「泛用式·终」的 108 段角色动画已在 UE 中逐项回读。按资源层和文件名区分同名动作。战斗待机使用 `BaseLayer/Stand2`，剑盾普攻使用 `BaseLayer/Attack01`。本机内容浏览器入口是 `/Game/Maps/Training/Nanami/L_NanamiTraining`。编辑器 MCP 已开启并实测可调用。下一步用首段末尾的实际姿势和输入响应标定二段衔接窗口。[实测与本地资产迁移](validation.md#七实默认涂装本地实测) · [MCP 环境](environment.md)
 
 **2026-11-19 · 第一段可操作普攻。** 训练地图中的原创占位人偶已接入 Enhanced Input。TS 选择剑盾普攻 Attack01，C++ 受理、播放 Montage 并按动作实例处理结束或中断。下一段才引入普攻续段与闪避打断后的红球资格。[回归记录](validation.md)
 
@@ -46,3 +46,5 @@
 动作流程优先确认黄球长按如何进入持续阶段、提前松手和自然耗尽分别播放哪些退出片段。后续研究资源结算时，再对照同样 5 红库存下的消耗和星芒增量。正式 Demo 选角和美术来源仍由用户确认。通用采样见[测量方案](research/measurement.md)，开发顺序见[架构草案](architecture.md)。
 
 跨设备接手先核对远端 main 与本地 HEAD，读 AGENTS.md 和本页，再按 [环境说明](environment.md) 编译并进行空地图启动检查。每个阶段结束更新本页与验证记录，将可复用的证据和决策分别写回对应文档。
+
+2026-11-20：芒星之迹资产按 Characters/Nanami/Startrail 归集，占位角色移入 Characters/TrainingFighter。下一步在新地图复测普攻并重新打包。
