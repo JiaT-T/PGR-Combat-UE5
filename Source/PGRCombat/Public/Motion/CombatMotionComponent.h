@@ -18,7 +18,7 @@ public:
 
     // 尝试按动作标识播放动画，并在该实例结束时调用回调。
     bool PlayAction(FName ActionId, FOnMontageEnded OnEnded);
-    // 查询当前动作是否处于可缓存输入的时段。
+    // 查询当前动作是否处于可立即衔接下一段的时段。
     bool IsInputBufferOpen() const;
     // 立即停止本组件跟踪的动作动画。
     void StopAction();

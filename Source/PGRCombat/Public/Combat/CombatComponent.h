@@ -19,7 +19,7 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Combat")
     ECombatInputResult SubmitInput(ECombatCommand Command, ECombatInputPhase Phase);
 
-    // 主动打断当前动作并丢弃其连段缓存。
+    // 主动停止并结算当前动作。
     UFUNCTION(BlueprintCallable, Category = "Combat")
     void InterruptActiveAction();
 
@@ -43,7 +43,7 @@ protected:
 private:
     // 接收指定动作实例的动画结束通知。
     void OnMontageEnded(UAnimMontage* Montage, bool bInterrupted, int64 InstanceId);
-    // 结束给定实例并处理其连段缓存。
+    // 结束给定实例并广播本次结算结果。
     void FinishAction(int64 InstanceId, ECombatActionEvent Event);
     // 分发一次动作生命周期通知。
     void NotifyAction(FName ActionId, int64 InstanceId, ECombatActionEvent Event);
@@ -54,6 +54,5 @@ private:
     FName ActiveActionId = NAME_None;
     int64 ActiveInstanceId = 0;
     int64 LastInstanceId = 0;
-    bool bBasicAttackBuffered = false;
     bool bEndingPlay = false;
 };

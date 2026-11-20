@@ -23,7 +23,7 @@ void UCombatComponent::EndPlay(const EEndPlayReason::Type Reason)
     Super::EndPlay(Reason);
 }
 
-// 请脚本按输入选招，再根据当前动作决定立即播放、缓存或拒绝。
+// 请脚本按输入选招；空闲时直接起手，动作中只在衔接窗口受理下一段。
 ECombatInputResult UCombatComponent::SubmitInput(ECombatCommand Command, ECombatInputPhase Phase)
 {
     UGameInstance* Game = GetWorld() ? GetWorld()->GetGameInstance() : nullptr;
@@ -39,17 +39,15 @@ ECombatInputResult UCombatComponent::SubmitInput(ECombatCommand Command, ECombat
         return ECombatInputResult::Ignored;
     }
 
-    if (ActiveInstanceId != 0)
+    if (ActiveInstanceId != 0 &&
+        (Command != ECombatCommand::BasicAttack || Phase != ECombatInputPhase::Pressed || !Motion->IsInputBufferOpen()))
     {
-        if (Command == ECombatCommand::BasicAttack && Phase == ECombatInputPhase::Pressed && Motion->IsInputBufferOpen())
-        {
-            bBasicAttackBuffered = true;
-            return ECombatInputResult::Buffered;
-        }
         NotifyAction(ActionId, 0, ECombatActionEvent::Rejected);
         return ECombatInputResult::Rejected;
     }
 
+    const int64 PreviousInstanceId = ActiveInstanceId;
+    const FName PreviousActionId = ActiveActionId;
     const int64 InstanceId = ++LastInstanceId;
     const FOnMontageEnded Ended = FOnMontageEnded::CreateUObject(this, &UCombatComponent::OnMontageEnded, InstanceId);
     if (!Motion->PlayAction(ActionId, Ended))
@@ -60,7 +58,16 @@ ECombatInputResult UCombatComponent::SubmitInput(ECombatCommand Command, ECombat
 
     ActiveInstanceId = InstanceId;
     ActiveActionId = ActionId;
-    NotifyAction(ActionId, InstanceId, ECombatActionEvent::Started);
+    if (PreviousInstanceId != 0)
+    {
+        NotifyAction(PreviousActionId, PreviousInstanceId, ECombatActionEvent::Chained);
+    }
+
+    // 续段通知的监听者可以打断新实例，此时不能再广播过期的起手。
+    if (ActiveInstanceId == InstanceId)
+    {
+        NotifyAction(ActionId, InstanceId, ECombatActionEvent::Started);
+    }
     return ECombatInputResult::Started;
 }
 
@@ -81,7 +88,7 @@ void UCombatComponent::OnMontageEnded(UAnimMontage* Montage, bool bInterrupted, 
     FinishAction(InstanceId, bInterrupted ? ECombatActionEvent::Interrupted : ECombatActionEvent::Completed);
 }
 
-// 结算匹配的动作实例，自然收招时尝试消费仍有效的普攻缓存。
+// 只结算当前动作的结束事件，旧段淡出回调不能影响正在播放的新段。
 void UCombatComponent::FinishAction(int64 InstanceId, ECombatActionEvent Event)
 {
     // 旧 Montage 的结束通知可能晚于下一次起手，只允许它回收自己的实例。
@@ -91,17 +98,9 @@ void UCombatComponent::FinishAction(int64 InstanceId, ECombatActionEvent Event)
     }
 
     const FName ActionId = ActiveActionId;
-    const bool bContinue = bBasicAttackBuffered && Event == ECombatActionEvent::Completed;
     ActiveActionId = NAME_None;
     ActiveInstanceId = 0;
-    bBasicAttackBuffered = false;
     NotifyAction(ActionId, InstanceId, Event);
-
-    // 结束事件的订阅者可能已经开始新动作，此时旧连段的缓存已过期。
-    if (bContinue && LastInstanceId == InstanceId && !bEndingPlay)
-    {
-        SubmitInput(ECombatCommand::BasicAttack, ECombatInputPhase::Pressed);
-    }
 }
 
 // 将动作编号、实例编号和生命周期事件写入日志并广播。

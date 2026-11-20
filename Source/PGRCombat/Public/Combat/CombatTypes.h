@@ -32,5 +32,6 @@ enum class ECombatActionEvent : uint8
     Started,
     Rejected,
     Completed,
-    Interrupted
+    Interrupted,
+    Chained
 };

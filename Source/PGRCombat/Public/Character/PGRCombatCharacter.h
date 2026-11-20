@@ -59,6 +59,10 @@ private:
     UPROPERTY(EditDefaultsOnly, Category = "Combat|Presentation")
     TSubclassOf<UAnimInstance> FighterAnimClass;
 
+    // 修正导入骨架与显示网格叠加的长度缩放，只影响胶囊体接收的动画位移。
+    UPROPERTY(EditDefaultsOnly, Category = "Combat|Presentation", meta = (ClampMin = "0.0"))
+    float FighterRootMotionTranslationScale = 1.0f;
+
     UPROPERTY(EditDefaultsOnly, Category = "Combat|Presentation")
     TObjectPtr<UCombatActionSet> ActionSet;
 
