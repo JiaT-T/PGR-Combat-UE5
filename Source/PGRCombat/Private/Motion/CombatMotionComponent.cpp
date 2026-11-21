@@ -24,7 +24,8 @@ bool UCombatMotionComponent::PlayAction(FName ActionId, ECombatCommand Command, 
         return false;
     }
 
-    UAnimMontage* Montage = Action->Montage;
+    const TObjectPtr<UAnimMontage>* Override = MontageOverrides.Find(ActionId);
+    UAnimMontage* Montage = Override && *Override ? Override->Get() : Action->Montage.Get();
     float Start = 0.0f;
     float End = Montage->GetPlayLength();
     if (!Action->Section.IsNone())

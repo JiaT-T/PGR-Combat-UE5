@@ -4,10 +4,9 @@
 #include "Components/ActorComponent.h"
 #include "NanamiFormComponent.generated.h"
 
+class UAnimMontage;
 class UCombatComponent;
 class UCombatMotionComponent;
-class UAnimSequence;
-class USkeletalMeshComponent;
 
 UENUM(BlueprintType)
 enum class ENanamiWeaponForm : uint8
@@ -30,6 +29,9 @@ public:
     // 读取当前已经生效的武器形态。
     UFUNCTION(BlueprintPure, Category = "Form")
     ENanamiWeaponForm GetWeaponForm() const { return WeaponForm; }
+
+    // 返回当前长按黄球所属的动作实例，动画蓝图按它区分收势与普通动作。
+    int64 GetYellowHoldInstanceId() const { return HoldInstanceId; }
 
     // 返回黄球和盾斧招式共用的星芒值。
     UFUNCTION(BlueprintPure, Category = "Form")
@@ -74,27 +76,14 @@ private:
     void OnActionChanged(FName ActionId, int64 InstanceId, ECombatActionEvent Event);
     // 在形态实际变化时通知动画和 HUD。
     void SetWeaponForm(ENanamiWeaponForm NewForm);
-    // 用当前段的原始斧动画驱动独立武器，隐藏藏入斧中的剑盾几何。
-    void UpdateAxePresentation(bool bVisible, FName Section = NAME_None);
 
     UPROPERTY(Transient)
     TObjectPtr<UCombatComponent> Combat;
     UPROPERTY(Transient)
     TObjectPtr<UCombatMotionComponent> Motion;
-    UPROPERTY(Transient)
-    TObjectPtr<USkeletalMeshComponent> BodyMesh;
-    UPROPERTY(Transient)
-    TObjectPtr<USkeletalMeshComponent> AxeMesh;
-    UPROPERTY(Transient)
-    TObjectPtr<UAnimSequence> PlayingAxeSequence;
-    UPROPERTY(EditDefaultsOnly, Category = "Weapons")
-    TObjectPtr<UAnimSequence> AxeIdle;
-    UPROPERTY(EditDefaultsOnly, Category = "Weapons")
-    TObjectPtr<UAnimSequence> AxeAttack44;
-    UPROPERTY(EditDefaultsOnly, Category = "Weapons")
-    TObjectPtr<UAnimSequence> AxeAttack47;
-    UPROPERTY(EditDefaultsOnly, Category = "Weapons")
-    TArray<FName> SwordShieldBones;
+    // 按原动作标识配置盾斧装备轨，红蓝球的技能结算继续共用同一动作。
+    UPROPERTY(EditDefaultsOnly, Category = "Form")
+    TMap<FName, TObjectPtr<UAnimMontage>> ShieldAxeMontages;
     UPROPERTY(EditDefaultsOnly, Category = "Training", meta = (ClampMin = "0", ClampMax = "100"))
     float InitialStarlight = 100.f;
     // 训练用输入阈值，单位为游戏秒。

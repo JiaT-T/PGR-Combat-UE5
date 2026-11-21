@@ -1,10 +1,8 @@
 #include "Combat/NanamiFormComponent.h"
 
-#include "Animation/AnimSequence.h"
 #include "Combat/CombatComponent.h"
-#include "Components/SkeletalMeshComponent.h"
 #include "Engine/World.h"
-#include "GameFramework/Character.h"
+#include "GameFramework/Actor.h"
 #include "Motion/CombatMotionComponent.h"
 #include "TimerManager.h"
 
@@ -30,17 +28,6 @@ void UNanamiFormComponent::BeginPlay()
     Super::BeginPlay();
     Combat = GetOwner()->FindComponentByClass<UCombatComponent>();
     Motion = GetOwner()->FindComponentByClass<UCombatMotionComponent>();
-    if (ACharacter* Character = Cast<ACharacter>(GetOwner()))
-    {
-        BodyMesh = Character->GetMesh();
-        AxeMesh = Character->FindComponentByTag<USkeletalMeshComponent>(TEXT("NanamiAxe"));
-        if (AxeMesh && BodyMesh)
-        {
-            AxeMesh->AttachToComponent(BodyMesh, FAttachmentTransformRules::SnapToTargetIncludingScale, TEXT("WeaponCase3"));
-            AxeMesh->SetRelativeTransform(FTransform::Identity);
-            UpdateAxePresentation(false);
-        }
-    }
     Starlight = FMath::Clamp(InitialStarlight, 0.f, 100.f);
     if (Combat)
     {
@@ -95,17 +82,12 @@ void UNanamiFormComponent::TickComponent(float DeltaTime, ELevelTick TickType, F
     Super::TickComponent(DeltaTime, TickType, TickFunction);
     if (Motion && Motion->IsBeforeActionSection(ExitSection))
     {
-        UpdateAxePresentation(true, Motion->GetCurrentActionSection());
         ConsumeStarlight(StarlightDrainPerSecond * DeltaTime);
     }
-    else
+    else if (Motion && Motion->GetCurrentActionSection() == ReturnSection)
     {
-        UpdateAxePresentation(false);
-        if (Motion && Motion->GetCurrentActionSection() == ReturnSection)
-        {
-            SetWeaponForm(ENanamiWeaponForm::SwordShield);
-            SetComponentTickEnabled(false);
-        }
+        SetWeaponForm(ENanamiWeaponForm::SwordShield);
+        SetComponentTickEnabled(false);
     }
 }
 
@@ -161,10 +143,9 @@ void UNanamiFormComponent::CancelYellow()
 // 仅从仍属本轮的攻击区间跳转，收刀期间重复松手或耗尽不重播。
 void UNanamiFormComponent::RequestYellowExit()
 {
-    if (HoldInstanceId != 0 && Combat && Combat->GetActiveInstanceId() == HoldInstanceId && Motion
-        && Motion->JumpForwardToActionSection(ExitSection))
+    if (HoldInstanceId != 0 && Combat && Combat->GetActiveInstanceId() == HoldInstanceId && Motion)
     {
-        UpdateAxePresentation(false);
+        Motion->JumpForwardToActionSection(ExitSection);
     }
 }
 
@@ -177,7 +158,6 @@ void UNanamiFormComponent::OnActionChanged(FName ActionId, int64 InstanceId, ECo
         {
             HoldInstanceId = InstanceId;
             SetComponentTickEnabled(true);
-            UpdateAxePresentation(true);
             SetWeaponForm(ENanamiWeaponForm::ShieldAxe);
         }
         else if (ActionId == SwordToAxe)
@@ -186,7 +166,6 @@ void UNanamiFormComponent::OnActionChanged(FName ActionId, int64 InstanceId, ECo
         }
         else if (ActionId == AxeToSword)
         {
-            UpdateAxePresentation(false);
             SetWeaponForm(ENanamiWeaponForm::SwordShield);
         }
     }
@@ -196,12 +175,7 @@ void UNanamiFormComponent::OnActionChanged(FName ActionId, int64 InstanceId, ECo
         HoldInstanceId = 0;
         bCanSpendRemainder = Starlight > 0.f;
         SetComponentTickEnabled(false);
-        UpdateAxePresentation(false);
         SetWeaponForm(ENanamiWeaponForm::SwordShield);
-    }
-    else if (ActionId == SwordToAxe && InstanceId != 0 && Event != ECombatActionEvent::Rejected)
-    {
-        UpdateAxePresentation(WeaponForm == ENanamiWeaponForm::ShieldAxe);
     }
 }
 
@@ -211,49 +185,17 @@ void UNanamiFormComponent::SetWeaponForm(ENanamiWeaponForm NewForm)
     if (WeaponForm != NewForm)
     {
         WeaponForm = NewForm;
-        OnWeaponFormChanged.Broadcast(NewForm);
-    }
-}
-
-// 独立斧沿角色挂点运动，阶段切换时播放同名武器原动画。
-void UNanamiFormComponent::UpdateAxePresentation(bool bVisible, FName Section)
-{
-    if (!AxeMesh || !BodyMesh)
-    {
-        return;
-    }
-    if (AxeMesh->IsVisible() != bVisible)
-    {
-        AxeMesh->SetVisibility(bVisible);
-        for (FName Bone : SwordShieldBones)
+        if (Motion)
         {
-            if (bVisible)
+            if (NewForm == ENanamiWeaponForm::ShieldAxe)
             {
-                BodyMesh->HideBoneByName(Bone, PBO_None);
+                Motion->MontageOverrides = ShieldAxeMontages;
             }
             else
             {
-                BodyMesh->UnHideBoneByName(Bone);
+                Motion->MontageOverrides.Reset();
             }
         }
-    }
-
-    UAnimSequence* Sequence = AxeIdle;
-    if (Section == TEXT("Attack44"))
-    {
-        Sequence = AxeAttack44;
-    }
-    else if (Section == TEXT("Attack47"))
-    {
-        Sequence = AxeAttack47;
-    }
-    if (!bVisible)
-    {
-        PlayingAxeSequence = nullptr;
-    }
-    else if (Sequence && Sequence != PlayingAxeSequence)
-    {
-        AxeMesh->PlayAnimation(Sequence, Sequence == AxeIdle);
-        PlayingAxeSequence = Sequence;
+        OnWeaponFormChanged.Broadcast(NewForm);
     }
 }

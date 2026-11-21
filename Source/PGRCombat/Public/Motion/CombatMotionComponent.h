@@ -17,6 +17,10 @@ public:
     UPROPERTY(EditAnywhere, Category = "Combat")
     TObjectPtr<UCombatActionSet> ActionSet = nullptr;
 
+    // 角色形态可替换指定动作的表现。指令、衔接窗口和实例回调仍来自原动作。
+    UPROPERTY(Transient)
+    TMap<FName, TObjectPtr<UAnimMontage>> MontageOverrides;
+
     // 尝试按动作标识播放动画，并在该实例结束时调用回调。
     bool PlayAction(FName ActionId, ECombatCommand Command, FOnMontageEnded OnEnded);
     // 查询当前动作是否处于可立即衔接下一段的时段。

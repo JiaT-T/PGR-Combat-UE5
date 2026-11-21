@@ -1,5 +1,6 @@
 #include "Motion/NanamiAnimInstance.h"
 
+#include "Animation/AnimMontage.h"
 #include "Combat/NanamiFormComponent.h"
 #include "GameFramework/Actor.h"
 
@@ -9,6 +10,8 @@ void UNanamiAnimInstance::NativeInitializeAnimation()
     Super::NativeInitializeAnimation();
     AActor* Owner = GetOwningActor();
     Form = Owner ? Owner->FindComponentByClass<UNanamiFormComponent>() : nullptr;
+    LastHoldInstanceId = 0;
+    LastHoldSection = NAME_None;
 }
 
 // 保持形态读取在游戏线程，供并行动画图使用该帧的只读姿态选择值。
@@ -23,5 +26,31 @@ void UNanamiAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
             Form = Owner->FindComponentByClass<UNanamiFormComponent>();
         }
     }
-    bShieldAxe = Form.IsValid() && Form->GetWeaponForm() == ENanamiWeaponForm::ShieldAxe;
+    // 蒙太奇刚混入时仍看得到旧待机，等动作盖住它再换成收势要接的待机。
+    const FAnimMontageInstance* Instance = GetActiveMontageInstance();
+    if (!Instance || Instance->GetDesiredWeight() <= Instance->GetWeight() + KINDA_SMALL_NUMBER)
+    {
+        bShieldAxe = Form.IsValid() && Form->GetWeaponForm() == ENanamiWeaponForm::ShieldAxe;
+    }
+}
+
+// 收势从任意攻击帧接入；保持 Montage 时间和胶囊根运动，仅衰减骨架姿势的突变。
+void UNanamiAnimInstance::Montage_Advance(float DeltaSeconds)
+{
+    Super::Montage_Advance(DeltaSeconds);
+    const int64 InstanceId = Form.IsValid() ? Form->GetYellowHoldInstanceId() : 0;
+    const FAnimMontageInstance* Instance = InstanceId != 0 ? GetActiveMontageInstance() : nullptr;
+    const FName Section = Instance ? Instance->GetCurrentSection() : NAME_None;
+    if (Instance && InstanceId == LastHoldInstanceId && !LastHoldSection.IsNone() && Section != LastHoldSection)
+    {
+        static const FName Separation(TEXT("Attack48"));
+        static const FName Recovery(TEXT("Attack45"));
+        static const FName ReturnToSword(TEXT("ReturnToSword"));
+        if (Section == Separation || Section == Recovery || Section == ReturnToSword)
+        {
+            RequestMontageInertialization(Instance->Montage.Get(), ReleasePoseBlendSeconds);
+        }
+    }
+    LastHoldInstanceId = InstanceId;
+    LastHoldSection = Section;
 }
