@@ -8,7 +8,8 @@ enum class ECombatCommand : uint8
 {
     BasicAttack,
     RedOrb,
-    BlueOrb
+    BlueOrb,
+    YellowOrb
 };
 
 UENUM(BlueprintType)
@@ -16,7 +17,8 @@ enum class ECombatInputPhase : uint8
 {
     Pressed,
     Released,
-    Canceled
+    Canceled,
+    Held
 };
 
 UENUM(BlueprintType)

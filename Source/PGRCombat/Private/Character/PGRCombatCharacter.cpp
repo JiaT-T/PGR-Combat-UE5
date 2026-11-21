@@ -3,6 +3,7 @@
 #include "Camera/CameraComponent.h"
 #include "Combat/CombatComponent.h"
 #include "Combat/CombatTypes.h"
+#include "Combat/NanamiFormComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/LocalPlayer.h"
@@ -66,6 +67,10 @@ void APGRCombatCharacter::PawnClientRestart()
 // 从注册时的本地玩家移除战斗映射，并清除缓存的输入子系统。
 void APGRCombatCharacter::RemoveCombatMapping()
 {
+    if (UNanamiFormComponent* Form = FindComponentByClass<UNanamiFormComponent>())
+    {
+        Form->CancelYellow();
+    }
     // 输入映射挂在 LocalPlayer 上，失去控制时需要主动移除本角色的映射。
     if (InputSubsystem.IsValid() && CombatMapping)
     {
@@ -88,7 +93,7 @@ void APGRCombatCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
     Super::EndPlay(EndPlayReason);
 }
 
-// 绑定普攻的三个输入阶段，并在红、蓝球按下时提交输入。
+// 绑定战斗指令，黄球单独接收按下、松开和取消。
 void APGRCombatCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
     Super::SetupPlayerInputComponent(PlayerInputComponent);
@@ -106,6 +111,15 @@ void APGRCombatCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInput
     if (Input && RedOrbAction)
     {
         Input->BindAction(RedOrbAction, ETriggerEvent::Started, this, &ThisClass::OnRedOrbPressed);
+    }
+    if (Input && YellowOrbAction)
+    {
+        if (UNanamiFormComponent* Form = FindComponentByClass<UNanamiFormComponent>())
+        {
+            Input->BindAction(YellowOrbAction, ETriggerEvent::Started, Form, &UNanamiFormComponent::PressYellow);
+            Input->BindAction(YellowOrbAction, ETriggerEvent::Completed, Form, &UNanamiFormComponent::ReleaseYellow);
+            Input->BindAction(YellowOrbAction, ETriggerEvent::Canceled, Form, &UNanamiFormComponent::CancelYellow);
+        }
     }
 }
 

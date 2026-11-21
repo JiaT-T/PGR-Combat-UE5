@@ -9,10 +9,10 @@ DEFINE_LOG_CATEGORY_STATIC(LogPGRCombat, Log, All);
 
 namespace
 {
-    // 红蓝球共用技能衔接窗口，其他指令保留各自的打断规则。
+    // 技能球共享衔接窗口，并可在确认发动时打断当前普攻。
     bool IsSignalOrb(ECombatCommand Command)
     {
-        return Command == ECombatCommand::RedOrb || Command == ECombatCommand::BlueOrb;
+        return Command == ECombatCommand::RedOrb || Command == ECombatCommand::BlueOrb || Command == ECombatCommand::YellowOrb;
     }
 }
 
@@ -50,12 +50,16 @@ ECombatInputResult UCombatComponent::SubmitInput(ECombatCommand Command, ECombat
 
     if (ActiveInstanceId != 0)
     {
-        if (Phase == ECombatInputPhase::Pressed && ActiveCommand == ECombatCommand::BasicAttack && Command != ActiveCommand)
+        // 黄球在松手或长按成立时才选出动作，两者都按一次发动意图处理。
+        const bool bYellowActivation = Command == ECombatCommand::YellowOrb
+            && (Phase == ECombatInputPhase::Held || Phase == ECombatInputPhase::Released);
+        const bool bActivation = Phase == ECombatInputPhase::Pressed || bYellowActivation;
+        if (bActivation && ActiveCommand == ECombatCommand::BasicAttack && Command != ActiveCommand)
         {
             return TryInterruptBasicAttack(Command, ActionId);
         }
         const bool bCanChain = Command == ActiveCommand || (IsSignalOrb(Command) && IsSignalOrb(ActiveCommand));
-        if (Phase != ECombatInputPhase::Pressed || !bCanChain || !Motion->IsInputBufferOpen())
+        if (!bActivation || !bCanChain || !Motion->IsInputBufferOpen())
         {
             NotifyAction(ActionId, 0, ECombatActionEvent::Rejected);
             return ECombatInputResult::Rejected;

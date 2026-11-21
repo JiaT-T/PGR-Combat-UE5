@@ -74,9 +74,39 @@ bool UCombatMotionComponent::PlayAction(FName ActionId, ECombatCommand Command, 
 // 用当前蒙太奇实例的本地播放位置判断是否允许立即续段。
 bool UCombatMotionComponent::IsInputBufferOpen() const
 {
-    UAnimInstance* AnimInstance = PlayingAnimInstance.Get();
-    const FAnimMontageInstance* Instance = AnimInstance ? AnimInstance->GetMontageInstanceForID(MontageInstanceId) : nullptr;
+    const FAnimMontageInstance* Instance = GetPlayingInstance();
     return Instance && BufferStart < BufferEnd && Instance->GetPosition() >= BufferStart && Instance->GetPosition() <= BufferEnd;
+}
+
+// 按已记录的实例编号定位动画，拒绝访问已结束的实例。
+FAnimMontageInstance* UCombatMotionComponent::GetPlayingInstance() const
+{
+    UAnimInstance* Anim = PlayingAnimInstance.Get();
+    FAnimMontageInstance* Instance = Anim ? Anim->GetMontageInstanceForID(MontageInstanceId) : nullptr;
+    return Instance && Instance->IsActive() ? Instance : nullptr;
+}
+
+// 获取当前实际播放的 Section，供武器和动作状态同步。
+FName UCombatMotionComponent::GetCurrentActionSection() const
+{
+    const FAnimMontageInstance* Instance = GetPlayingInstance();
+    return Instance ? Instance->GetCurrentSection() : NAME_None;
+}
+
+// 对照目标段的实际时间，避免写死动画时长或重播已进入的收刀。
+bool UCombatMotionComponent::IsBeforeActionSection(FName Section) const
+{
+    const FAnimMontageInstance* Instance = GetPlayingInstance();
+    const UAnimMontage* Montage = Instance ? Instance->Montage.Get() : nullptr;
+    const int32 Index = Montage ? Montage->GetSectionIndex(Section) : INDEX_NONE;
+    return Index != INDEX_NONE && Instance->GetPosition() < Montage->GetAnimCompositeSection(Index).GetTime();
+}
+
+// 中途松手时直接移动本实例的播放游标，保留原有结束回调。
+bool UCombatMotionComponent::JumpForwardToActionSection(FName Section)
+{
+    FAnimMontageInstance* Instance = GetPlayingInstance();
+    return Instance && IsBeforeActionSection(Section) && Instance->JumpToSectionName(Section);
 }
 
 // 按实例编号停止组件先前启动的蒙太奇并清除跟踪记录。
