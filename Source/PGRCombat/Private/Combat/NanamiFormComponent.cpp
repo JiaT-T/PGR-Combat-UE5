@@ -12,7 +12,7 @@ namespace
     const FName AxeToSword(TEXT("YellowAxeToSword"));
     const FName YellowHold(TEXT("YellowHold"));
     const FName LastAttackSection(TEXT("Attack47"));
-    const FName ReturnSection(TEXT("ReturnToSword"));
+    const FName ReturnSection(TEXT("Attack48"));
 }
 
 // 平时关闭组件 Tick，焚冲开始后才推进星芒消耗。
