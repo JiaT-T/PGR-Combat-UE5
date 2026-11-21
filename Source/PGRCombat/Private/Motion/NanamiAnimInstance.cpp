@@ -26,7 +26,14 @@ void UNanamiAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
             Form = Owner->FindComponentByClass<UNanamiFormComponent>();
         }
     }
-    // 蒙太奇刚混入时仍看得到旧待机，等动作盖住它再换成收势要接的待机。
+    // 焚冲的持斧姿势由蒙太奇提供，松手、耗尽和自然结束都从同一个剑盾待机混出。
+    if (Form.IsValid() && Form->GetYellowHoldInstanceId() != 0)
+    {
+        bShieldAxe = false;
+        return;
+    }
+
+    // 普通切形刚混入时仍看得到旧待机，等动作盖住它再换成目标待机。
     const FAnimMontageInstance* Instance = GetActiveMontageInstance();
     if (!Instance || Instance->GetDesiredWeight() <= Instance->GetWeight() + KINDA_SMALL_NUMBER)
     {
