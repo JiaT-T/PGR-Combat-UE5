@@ -1,5 +1,21 @@
 # 验证记录
 
+## 长按黄球只播放最后一段收刀
+
+2026-11-21，七实训练场。旧试玩版代码 `735ac44`、资产 `9f7a566` 的收刀顺序是 `Attack48 → Attack45 → ReturnToSword`。前两段合计约 5.8 秒。`ReturnToSword` 使用装备序列 `YellowReturnSword`（黄球 `Attack32`）。
+
+用 UE 5.8.4 读取 `AM_EquippedYellowHold` 的七个 Section 及其序列，保存后在另一编辑器进程重新读回。自然播放的后继关系只有一处修改，`Attack47` 直接连接 `ReturnToSword`。四段攻击仍为 `Attack43 → Attack44 → Attack46 → Attack47`（约 0.533、1.500、0.867、1.500 秒）。回切从 `YellowReturnSword` 的第 0 秒起播，以 1 倍速完整播放一次，时长 2.600 秒。
+
+负对照使用已经改为松手直跳的中间代码，搭配旧资产 `9f7a566`。在 D3D12 编辑器游戏模式持续按住 3，实际经过 `43 → 44 → 46 → 47 → 48 → 45 → ReturnToSword`。`FullHold` 的精确段序列断言失败，编辑器进程仍返回 0。自然结束的验证须读取逐段日志和自动化测试结果，并搭配更新后的 Montage。
+
+最终集成验证使用代码 PR #11 的 `48fbfee4ab68b95990783639988ffcb6aa914bd7`、更新后的 Montage、UE 5.8.4（CL 58902052）、D3D12 和 Win64 Development。执行 `npm.cmd run build`，编译 `PGRCombatEditor`、`PGRCombat` 两个目标，并以 `BuildCookRun -platform=Win64 -clientconfig=Development -build -cook -map=/Game/Maps/Training/Nanami/L_NanamiTraining+/Game/Maps/Training/TrainingFighter/L_CombatTraining -stage -pak -iostore -package` 重新打包。Cook 处理 635 个包，0 个错误、0 个警告。
+
+在 `UnrealEditor-Cmd` 的 `-game -d3d12 -RenderOffscreen` 模式进入七实训练图，用 `Automation RunTests PGR.Combat.` 运行战斗回归，17/17 通过。用例向训练角色的 `APlayerController::InputKey` 回放主键盘 3 和 J 的按下、松开事件。在 `Attack43`、`44`、`46`、`47` 分别松手，另在 `44` 耗尽星芒、在 `47` 持续按住至自然结束。六条路径均在同一黄球实例内直接转入 `ReturnToSword`，回切时为剑盾且停止耗星，收招后长按实例归零，J 能起播 `Attack01`。自然结束后继续持键不能再次发动，松开后重新按下可使用剩余星芒。
+
+从新包 `Windows/PGRCombat.exe` 启动相同训练图，以相同 D3D12 和自动化参数单独复跑，17/17 通过。六条收刀路径逐帧读到的序列均为 `YellowReturnSword`，回切期间胶囊无位移。自然结束用例的星芒保持在 86.322，耗尽用例保持为 0。收招后实例与组件 Tick 均已清理，按 J 起播剑盾 `Attack01`。两端还覆盖黄球短按双向切形和库存结算。两端最终配置的全套回归均在首轮通过。
+
+独立包另以 60 Hz 启动两场图形实录，在第 85 帧按下主键盘 3。第一场在第 173 帧松手，`Attack44` 在同帧转入 `ReturnToSword`。第二场持续按住，第 367 帧从 `Attack47` 转入 `ReturnToSword`，到第 535 帧才松手。两场各只有一个 `YellowHold` 实例，均自然完成。随后分别录到 35 帧和 34 帧剑盾待机（`AxeAssembly < 0.01`）。按 J 后实际起播并完整播放 `AM_EquippedAttack01`。自动化用例和原始实录保存在本机。操作手感待玩家验收。
+
 ## 剑盾四段普攻与武器动作
 
 2026-11-20，七实默认涂装训练图。四段均从首帧、1.0 倍速播放；输入窗口按前段本地时间计算，依次为 0.333、0.500、1.667 秒，第二至第四段混入均为 0.08 秒。装备版第三段全长 4.40 秒，第四段 4.333 秒。输入会提前接走前段，单点仍可自然收招。
