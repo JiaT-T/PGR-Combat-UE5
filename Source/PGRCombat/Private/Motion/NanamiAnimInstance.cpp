@@ -48,15 +48,11 @@ void UNanamiAnimInstance::Montage_Advance(float DeltaSeconds)
     const int64 InstanceId = Form.IsValid() ? Form->GetYellowHoldInstanceId() : 0;
     const FAnimMontageInstance* Instance = InstanceId != 0 ? GetActiveMontageInstance() : nullptr;
     const FName Section = Instance ? Instance->GetCurrentSection() : NAME_None;
-    if (Instance && InstanceId == LastHoldInstanceId && !LastHoldSection.IsNone() && Section != LastHoldSection)
+    static const FName ReturnToSword(TEXT("ReturnToSword"));
+    if (Instance && InstanceId == LastHoldInstanceId && !LastHoldSection.IsNone()
+        && Section == ReturnToSword && Section != LastHoldSection)
     {
-        static const FName Separation(TEXT("Attack48"));
-        static const FName Recovery(TEXT("Attack45"));
-        static const FName ReturnToSword(TEXT("ReturnToSword"));
-        if (Section == Separation || Section == Recovery || Section == ReturnToSword)
-        {
-            RequestMontageInertialization(Instance->Montage.Get(), ReleasePoseBlendSeconds);
-        }
+        RequestMontageInertialization(Instance->Montage.Get(), ReleasePoseBlendSeconds);
     }
     LastHoldInstanceId = InstanceId;
     LastHoldSection = Section;

@@ -11,7 +11,7 @@ namespace
     const FName SwordToAxe(TEXT("YellowSwordToAxe"));
     const FName AxeToSword(TEXT("YellowAxeToSword"));
     const FName YellowHold(TEXT("YellowHold"));
-    const FName ExitSection(TEXT("Attack48"));
+    const FName LastAttackSection(TEXT("Attack47"));
     const FName ReturnSection(TEXT("ReturnToSword"));
 }
 
@@ -80,11 +80,17 @@ void UNanamiFormComponent::ConsumeStarlight(float Amount)
 void UNanamiFormComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* TickFunction)
 {
     Super::TickComponent(DeltaTime, TickType, TickFunction);
-    if (Motion && Motion->IsBeforeActionSection(ExitSection))
+    if (!Motion)
+    {
+        return;
+    }
+
+    const FName Section = Motion->GetCurrentActionSection();
+    if (Section == LastAttackSection || Motion->IsBeforeActionSection(LastAttackSection))
     {
         ConsumeStarlight(StarlightDrainPerSecond * DeltaTime);
     }
-    else if (Motion && Motion->GetCurrentActionSection() == ReturnSection)
+    else if (Section == ReturnSection)
     {
         SetWeaponForm(ENanamiWeaponForm::SwordShield);
         SetComponentTickEnabled(false);
@@ -145,7 +151,7 @@ void UNanamiFormComponent::RequestYellowExit()
 {
     if (HoldInstanceId != 0 && Combat && Combat->GetActiveInstanceId() == HoldInstanceId && Motion)
     {
-        Motion->JumpForwardToActionSection(ExitSection);
+        Motion->JumpForwardToActionSection(ReturnSection);
     }
 }
 

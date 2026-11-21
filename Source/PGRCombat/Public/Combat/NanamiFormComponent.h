@@ -69,7 +69,7 @@ protected:
 private:
     // 达到阈值只提交一次长按，直到下一次真实按下才重置。
     void OnHoldThreshold();
-    // 跳至本实例的收刀首段，重复退出不会重播。
+    // 从当前焚冲实例直接跳到回剑盾段，重复退出不会重播。
     void RequestYellowExit();
     // 监听成功起播和退出，提交形态变化。
     UFUNCTION()

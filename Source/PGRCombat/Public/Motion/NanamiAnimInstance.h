@@ -25,7 +25,7 @@ protected:
 
 private:
     TWeakObjectPtr<UNanamiFormComponent> Form;
-    // 手动跳至 48 和自然进入后续收势段共用同一姿势过渡时长。
+    // 松手和自然结束都从上一帧的攻击姿势混入同一个回剑盾段。
     UPROPERTY(EditDefaultsOnly, Category = "Form", meta = (ClampMin = "0", Units = "s"))
     float ReleasePoseBlendSeconds = 0.12f;
     int64 LastHoldInstanceId = 0;
