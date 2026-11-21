@@ -4,6 +4,8 @@
 #include "NanamiAbilityWidget.generated.h"
 
 class UImage;
+class UNanamiFormComponent;
+enum class ENanamiWeaponForm : uint8;
 class UNanamiOrbComponent;
 class UTextBlock;
 struct FNanamiOrbState;
@@ -26,9 +28,13 @@ private:
     // 用同一次结算后的快照刷新球图标、库存、三消提示和双星。
     UFUNCTION()
     void RefreshOrbs(const FNanamiOrbState& State);
+    // 随持械形态切换黄球图标。
+    UFUNCTION()
+    void RefreshForm(ENanamiWeaponForm Form);
 
     TWeakObjectPtr<APlayerController> ControllerSource;
     TWeakObjectPtr<UNanamiOrbComponent> OrbSource;
+    TWeakObjectPtr<UNanamiFormComponent> FormSource;
 
     UPROPERTY(meta = (BindWidget))
     TObjectPtr<UImage> RedOrbIcon;
@@ -48,6 +54,10 @@ private:
     TObjectPtr<UTextBlock> BlueOrbStock;
     UPROPERTY(meta = (BindWidget))
     TObjectPtr<UTextBlock> SignalStockTotal;
+    UPROPERTY(meta = (BindWidgetOptional))
+    TObjectPtr<UImage> YellowOrbIcon;
+    UPROPERTY(meta = (BindWidgetOptional))
+    TObjectPtr<UImage> YellowOrbAlternate;
     UPROPERTY(meta = (BindWidget))
     TObjectPtr<UImage> CoreStarTop;
     UPROPERTY(meta = (BindWidget))

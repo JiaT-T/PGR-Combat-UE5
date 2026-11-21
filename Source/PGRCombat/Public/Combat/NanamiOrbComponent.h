@@ -59,6 +59,12 @@ public:
     UFUNCTION(BlueprintPure, Category = "Orbs")
     int32 GetTrainingGroupSize(ENanamiOrbColor Color) const;
 
+    // 敌方攻击接入后提供格挡机会查询；默认无机会，由正常的一段动作起手。
+    UFUNCTION(BlueprintNativeEvent, BlueprintPure, Category = "Orbs|Guard")
+    bool HasGuardOpportunity(ENanamiOrbColor Color) const;
+    // 未提供敌方攻击窗口与距离时没有可格挡目标。
+    virtual bool HasGuardOpportunity_Implementation(ENanamiOrbColor Color) const;
+
     // 将脚本计算出的信号球结算一次应用到仍有效的动作实例。
     UFUNCTION()
     void ApplyOrbResult(int64 InstanceId, ENanamiOrbColor Color, int32 SpentOrbs, int32 EffectivePings, int32 SpentStars,
@@ -87,6 +93,10 @@ private:
 
     UPROPERTY(EditAnywhere, Category = "Training|Orbs", meta = (ClampMin = "0", ClampMax = "2"))
     int32 InitialStars = 0;
+
+    // 训练场验证耗星时可启用。最后一星先完成正式结算，再补回两星。
+    UPROPERTY(EditAnywhere, Category = "Training|Orbs")
+    bool bRefillTrainingStars = false;
 
     UPROPERTY(EditAnywhere, Category = "Training|Orbs", meta = (ClampMin = "1", ClampMax = "3"))
     int32 TrainingRedGroupSize = 3;

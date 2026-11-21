@@ -1,4 +1,5 @@
 #include "Combat/NanamiOrbComponent.h"
+#include "Combat/NanamiFormComponent.h"
 
 #include "Combat/CombatComponent.h"
 #include "Engine/GameInstance.h"
@@ -16,7 +17,7 @@ void UNanamiOrbComponent::BeginPlay()
     OrbState = FNanamiOrbState();
     OrbState.RedStock = FMath::Clamp(InitialRedStock, 0, MaxStock);
     OrbState.BlueStock = FMath::Clamp(InitialBlueStock, 0, MaxStock - OrbState.RedStock);
-    OrbState.Stars = FMath::Clamp(InitialStars, 0, 2);
+    OrbState.Stars = bRefillTrainingStars ? 2 : FMath::Clamp(InitialStars, 0, 2);
     LastAppliedInstanceId = 0;
     Combat = GetOwner()->FindComponentByClass<UCombatComponent>();
     ScriptHost = UGameInstance::GetSubsystem<UCombatScriptSubsystem>(GetWorld()->GetGameInstance());
@@ -49,6 +50,12 @@ void UNanamiOrbComponent::OnCombatActionChanged(FName ActionId, int64 InstanceId
     {
         ScriptHost->NanamiOrbActionStarted.ExecuteIfBound(this, ActionId, InstanceId);
     }
+}
+
+// 默认没有敌方攻击上下文，后续由战斗场景提供格挡机会。
+bool UNanamiOrbComponent::HasGuardOpportunity_Implementation(ENanamiOrbColor Color) const
+{
+    return false;
 }
 
 // 按信号球颜色读取训练场的同色组大小。
@@ -99,6 +106,14 @@ void UNanamiOrbComponent::ApplyOrbResult(int64 InstanceId, ENanamiOrbColor Color
     }
 
     LastAppliedInstanceId = InstanceId;
+    if (EffectivePings > 0)
+    {
+        if (UNanamiFormComponent* Form = GetOwner()->FindComponentByClass<UNanamiFormComponent>())
+        {
+            constexpr float StarlightByPing[] = {0.f, 15.f, 30.f, 50.f};
+            Form->AddStarlight(StarlightByPing[EffectivePings]);
+        }
+    }
     OrbState.Stars -= SpentStars;
     // 使用亮星结算二段时，两色同时获得续段，或在最后一星耗尽时一起回退。
     if (SpentStars > 0)
@@ -115,6 +130,11 @@ void UNanamiOrbComponent::ApplyOrbResult(int64 InstanceId, ENanamiOrbColor Color
            *StaticEnum<ENanamiOrbColor>()->GetNameStringByValue(static_cast<int64>(Color)), InstanceId, SpentOrbs, EffectivePings,
            OrbState.RedStock, OrbState.BlueStock, OrbState.Stars, OrbState.bRedFollowUp, OrbState.bBlueFollowUp);
     OnOrbStateChanged.Broadcast(OrbState);
+    if (bRefillTrainingStars && SpentStars > 0 && OrbState.Stars == 0)
+    {
+        OrbState.Stars = 2;
+        OnOrbStateChanged.Broadcast(OrbState);
+    }
 }
 
 // 每色独立计时；刷新一种颜色不会推迟另一种颜色自然到期。
