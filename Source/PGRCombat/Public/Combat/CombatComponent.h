@@ -21,6 +21,10 @@ public:
     // 取消挂在当前实例上的提前输入，角色失去控制时也要清理。
     void ClearBufferedInput();
 
+    // 当前实例锁定动作时，拒绝新指令、普通打断与移动输入。
+    UFUNCTION(BlueprintPure, Category = "Combat")
+    bool IsActionLocked() const;
+
     // 提交带有按键阶段的指令，并返回本次受理结果。
     UFUNCTION(BlueprintCallable, Category = "Combat")
     ECombatInputResult SubmitInput(ECombatCommand Command, ECombatInputPhase Phase);
@@ -49,12 +53,22 @@ protected:
     virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* TickFunction) override;
 
 private:
+    // 盾斧待机按下即起手，连段中记录按下窗口，同时开始判断这次长按。
+    ECombatInputResult BeginBasicPress(FName TapAction);
+    // 松手时按当初按下的窗口确认轻击，避免边缘输入因松手晚一帧丢失。
+    ECombatInputResult ReleaseBasicPress();
+    // 长按达到阈值只提交一次，由动作窗口决定实际起播时刻。
+    void ConfirmBasicHold();
+    // 清除尚在分辨的短按和长按，解除对应计时器。
+    void ResetBasicPress();
+    // 把已成立的输入保留到本实例开窗或自然结束。
+    ECombatInputResult BufferInput(ECombatCommand Command, ECombatInputPhase Phase, FName ActionId, bool bWaitForWindow);
     // 尝试以另一类指令打断当前普攻，仅在新动作成功起播后通知旧实例。
     ECombatInputResult TryInterruptBasicAttack(ECombatCommand Command, FName ActionId);
     // 播放选定动作，并用指定事件结算被替换的实例。
     ECombatInputResult StartAction(ECombatCommand Command, FName ActionId, ECombatActionEvent PreviousEvent);
     // 再次确认当前实例储存的出招意图仍有效，然后尝试切招一次。
-    bool ConsumeBufferedInput();
+    bool ConsumeBufferedInput(ECombatActionEvent PreviousEvent);
 
     // 接收指定动作实例的动画结束通知。
     void OnMontageEnded(UAnimMontage* Montage, bool bInterrupted, int64 InstanceId);
@@ -65,6 +79,14 @@ private:
 
     UPROPERTY(Transient)
     TObjectPtr<UCombatMotionComponent> Motion = nullptr;
+
+    UPROPERTY(EditDefaultsOnly, Category = "Combat|Input", meta = (ClampMin = "0.01", Units = "s"))
+    float BasicHoldThresholdSeconds = 0.30f;
+
+    FTimerHandle BasicHoldTimer;
+    double BasicPressedAt = -1.0;
+    FName TapActionAtPress = NAME_None;
+    bool bTapAcceptedAtPress = false;
 
     FName ActiveActionId = NAME_None;
     // 只在实例活动期间读取，区分同一指令的续段与高优先级技能打断。

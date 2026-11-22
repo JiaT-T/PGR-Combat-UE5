@@ -96,6 +96,7 @@ bool UCombatMotionComponent::PlayAction(FName ActionId, ECombatCommand Command, 
     const int32 PreviousInstanceId = MontageInstanceId;
     PlayingAnimInstance = AnimInstance;
     MontageInstanceId = Instance->GetInstanceID();
+    bRequireFullPlayback = Tasks.bRequireFullPlayback;
     InputBuffer = Tasks.InputBuffer;
     ChainWindow = Tasks.ChainWindow;
     if (Action.InputBufferSeconds > 0.f)
@@ -139,6 +140,13 @@ bool UCombatMotionComponent::HasReachedChainWindow() const
 {
     const FAnimMontageInstance* Instance = GetPlayingInstance();
     return Instance && Instance->GetPosition() >= ChainWindow.StartSeconds;
+}
+
+// 仅当本段还会经过衔接窗口时提前排入下一招。
+bool UCombatMotionComponent::IsBeforeChainWindow() const
+{
+    const FAnimMontageInstance* Instance = GetPlayingInstance();
+    return Instance && ChainWindow.StartSeconds < ChainWindow.EndSeconds && Instance->GetPosition() < ChainWindow.StartSeconds;
 }
 
 // 按已记录的实例编号定位动画，拒绝访问已结束的实例。

@@ -70,6 +70,7 @@ void APGRCombatCharacter::RemoveCombatMapping()
     if (Combat)
     {
         Combat->ClearBufferedInput();
+        Combat->SubmitInput(ECombatCommand::BasicAttack, ECombatInputPhase::Canceled);
     }
     if (UNanamiFormComponent* Form = FindComponentByClass<UNanamiFormComponent>())
     {
@@ -88,6 +89,12 @@ void APGRCombatCharacter::UnPossessed()
 {
     RemoveCombatMapping();
     Super::UnPossessed();
+}
+
+// 锁定期间暂停普通移动输入，完整收招后恢复常规控制。
+bool APGRCombatCharacter::IsMoveInputIgnored() const
+{
+    return (Combat && Combat->IsActionLocked()) || Super::IsMoveInputIgnored();
 }
 
 // 角色退出世界前，清理仍在本地玩家上生效的映射。

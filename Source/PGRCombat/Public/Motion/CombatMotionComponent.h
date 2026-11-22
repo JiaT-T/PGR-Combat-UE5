@@ -36,6 +36,10 @@ public:
     bool IsInputBufferOpen() const { return GetChainWindow() == ECombatChainWindow::Chain; }
     // 判断一次已缓存的输入是否随动画越过了允许切招的起点。
     bool HasReachedChainWindow() const;
+    // 查询当前实例的衔接窗口是否仍在前方，可等待长按意图。
+    bool IsBeforeChainWindow() const;
+    // 返回本次实际播放的 Ability 是否要求完整收招。
+    bool RequiresFullPlayback() const { return bRequireFullPlayback; }
     // 返回当前实例正在播放的段名，供分段表现读取。
     FName GetCurrentActionSection() const;
     // 检查活动实例是否仍处于指定段之前。
@@ -52,4 +56,5 @@ private:
     int32 MontageInstanceId = INDEX_NONE;
     FCombatAbilityWindow InputBuffer;
     FCombatAbilityWindow ChainWindow;
+    bool bRequireFullPlayback = false;
 };

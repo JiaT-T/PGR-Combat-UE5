@@ -27,6 +27,7 @@ bool UCombatMontageAbility::ResolveTasks(FCombatMontageTasks& OutTasks) const
     const UCombatInputBufferTask* Buffer = nullptr;
     const UCombatChainWindowTask* Chain = nullptr;
     FCombatMontageTasks Resolved;
+    Resolved.bRequireFullPlayback = bRequireFullPlayback;
     for (const UCombatAbilityTask* Task : Tasks)
     {
         if (const auto* Play = Cast<UCombatPlayMontageTask>(Task))

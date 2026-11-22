@@ -66,6 +66,7 @@ struct FCombatAbilityWindow
 struct FCombatMontageTasks
 {
     UAnimMontage* Montage = nullptr;
+    bool bRequireFullPlayback = false;
     FCombatAbilityWindow InputBuffer;
     FCombatAbilityWindow ChainWindow;
 };
@@ -79,6 +80,10 @@ class PGRCOMBAT_API UCombatMontageAbility : public UObject
 public:
     UPROPERTY(EditDefaultsOnly, Category = "Ability")
     ECombatCommand Command = ECombatCommand::BasicAttack;
+
+    // 选中时，普通输入和移动必须等待本实例完整收招。
+    UPROPERTY(EditDefaultsOnly, Category = "Ability")
+    bool bRequireFullPlayback = false;
 
     // 至少需要一个播放 Task，提前输入和立即衔接分别按需添加。
     UPROPERTY(EditDefaultsOnly, Instanced, Category = "Ability")

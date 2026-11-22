@@ -22,6 +22,8 @@ public:
     void PawnClientRestart() override;
     // 失去控制权时释放本角色占用的输入映射。
     void UnPossessed() override;
+    // 全程锁定的技能中忽略玩家平移输入，动画自身根位移照常生效。
+    bool IsMoveInputIgnored() const override;
 
 protected:
     // 在组件就绪后应用角色的表现配置。

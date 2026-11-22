@@ -100,7 +100,7 @@ void UNanamiFormComponent::TickComponent(float DeltaTime, ELevelTick TickType, F
 // 每次真正的按下只建立一个计时器，收刀期间忽略新的手势。
 void UNanamiFormComponent::PressYellow()
 {
-    if (!Combat || bYellowPressed || HoldInstanceId != 0)
+    if (!Combat || Combat->IsActionLocked() || bYellowPressed || HoldInstanceId != 0)
     {
         return;
     }
