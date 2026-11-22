@@ -16,6 +16,14 @@ namespace
     }
 }
 
+// 平时关闭 Tick，仅在缓冲与实际可切招时刻之间跟随动画进度。
+UCombatComponent::UCombatComponent()
+{
+    PrimaryComponentTick.bCanEverTick = true;
+    PrimaryComponentTick.bStartWithTickEnabled = false;
+    PrimaryComponentTick.TickGroup = TG_PostPhysics;
+}
+
 // 接受战斗输入前，从同一角色取得动作播放组件。
 void UCombatComponent::BeginPlay()
 {
@@ -42,6 +50,10 @@ ECombatInputResult UCombatComponent::SubmitInput(ECombatCommand Command, ECombat
         return ECombatInputResult::Rejected;
     }
 
+    if (Phase == ECombatInputPhase::Canceled && Command == BufferedCommand)
+    {
+        ClearBufferedInput();
+    }
     const FName ActionId = Scripts->ResolveAction(this, Command, Phase);
     if (ActionId.IsNone())
     {
@@ -59,10 +71,19 @@ ECombatInputResult UCombatComponent::SubmitInput(ECombatCommand Command, ECombat
             return TryInterruptBasicAttack(Command, ActionId);
         }
         const bool bCanChain = Command == ActiveCommand || (IsSignalOrb(Command) && IsSignalOrb(ActiveCommand));
-        if (!bActivation || !bCanChain || !Motion->IsInputBufferOpen())
+        const ECombatChainWindow Window = Motion->GetChainWindow();
+        if (!bActivation || !bCanChain || Window == ECombatChainWindow::Closed)
         {
             NotifyAction(ActionId, 0, ECombatActionEvent::Rejected);
             return ECombatInputResult::Rejected;
+        }
+        if (Window == ECombatChainWindow::Buffer)
+        {
+            BufferedActionId = ActionId;
+            BufferedCommand = Command;
+            BufferedPhase = Phase;
+            SetComponentTickEnabled(true);
+            return ECombatInputResult::Buffered;
         }
     }
     return StartAction(Command, ActionId, ECombatActionEvent::Chained);
@@ -92,6 +113,7 @@ ECombatInputResult UCombatComponent::StartAction(ECombatCommand Command, FName A
         return ECombatInputResult::Rejected;
     }
 
+    ClearBufferedInput();
     ActiveInstanceId = InstanceId;
     ActiveActionId = ActionId;
     ActiveCommand = Command;
@@ -108,6 +130,43 @@ ECombatInputResult UCombatComponent::StartAction(ECombatCommand Command, FName A
     return ECombatInputResult::Started;
 }
 
+// 缓存窗口与衔接窗口分别计时，只有动画实际前进到衔接窗口才会起播下一段。
+void UCombatComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* TickFunction)
+{
+    Super::TickComponent(DeltaTime, TickType, TickFunction);
+    if (Motion && Motion->HasReachedChainWindow())
+    {
+        ConsumeBufferedInput();
+    }
+}
+
+// 重新检查此刻形态和段号，只消费本实例的一次输入。
+bool UCombatComponent::ConsumeBufferedInput()
+{
+    if (BufferedActionId.IsNone() || bEndingPlay)
+    {
+        return false;
+    }
+    const FName ActionId = BufferedActionId;
+    const ECombatCommand Command = BufferedCommand;
+    const ECombatInputPhase Phase = BufferedPhase;
+    ClearBufferedInput();
+    UGameInstance* Game = GetWorld() ? GetWorld()->GetGameInstance() : nullptr;
+    UCombatScriptSubsystem* Scripts = Game ? Game->GetSubsystem<UCombatScriptSubsystem>() : nullptr;
+    if (!Scripts || Scripts->ResolveAction(this, Command, Phase) != ActionId)
+    {
+        return false;
+    }
+    return StartAction(Command, ActionId, ECombatActionEvent::Chained) == ECombatInputResult::Started;
+}
+
+// 起播新招、取消输入或结束实例时撤销旧招的缓冲。
+void UCombatComponent::ClearBufferedInput()
+{
+    BufferedActionId = NAME_None;
+    SetComponentTickEnabled(false);
+}
+
 // 停止当前动画，并用其原实例编号结算打断。
 void UCombatComponent::InterruptActiveAction()
 {
@@ -122,6 +181,11 @@ void UCombatComponent::InterruptActiveAction()
 // 将蒙太奇的结束回调转成对应实例的自然收招或打断事件。
 void UCombatComponent::OnMontageEnded(UAnimMontage* Montage, bool bInterrupted, int64 InstanceId)
 {
+    // 极低帧率下动画可能一次推进到结束；只补消费本实例自然经过的衔接窗。
+    if (!bInterrupted && InstanceId == ActiveInstanceId && ConsumeBufferedInput())
+    {
+        return;
+    }
     FinishAction(InstanceId, bInterrupted ? ECombatActionEvent::Interrupted : ECombatActionEvent::Completed);
 }
 
@@ -135,6 +199,7 @@ void UCombatComponent::FinishAction(int64 InstanceId, ECombatActionEvent Event)
     }
 
     const FName ActionId = ActiveActionId;
+    ClearBufferedInput();
     ActiveActionId = NAME_None;
     ActiveInstanceId = 0;
     NotifyAction(ActionId, InstanceId, Event);

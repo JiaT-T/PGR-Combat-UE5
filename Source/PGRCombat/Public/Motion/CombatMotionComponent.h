@@ -2,11 +2,18 @@
 
 #include "Components/ActorComponent.h"
 #include "Animation/AnimMontage.h"
+#include "Combat/CombatMontageAbility.h"
 #include "CombatMotionComponent.generated.h"
 
 class UCombatActionSet;
 class UAnimInstance;
-enum class ECombatCommand : uint8;
+
+enum class ECombatChainWindow : uint8
+{
+    Closed,
+    Buffer,
+    Chain
+};
 
 UCLASS(ClassGroup = (Combat), meta = (BlueprintSpawnableComponent))
 class PGRCOMBAT_API UCombatMotionComponent : public UActorComponent
@@ -23,8 +30,12 @@ public:
 
     // 尝试按动作标识播放动画，并在该实例结束时调用回调。
     bool PlayAction(FName ActionId, ECombatCommand Command, FOnMontageEnded OnEnded);
-    // 查询当前动作是否处于可立即衔接下一段的时段。
-    bool IsInputBufferOpen() const;
+    // 查询本次按下应当被忽略、暂存，还是立即切到下一段。
+    ECombatChainWindow GetChainWindow() const;
+    // 兼容已有的立即续段查询，提前输入区间不视作已经开窗。
+    bool IsInputBufferOpen() const { return GetChainWindow() == ECombatChainWindow::Chain; }
+    // 判断一次已缓存的输入是否随动画越过了允许切招的起点。
+    bool HasReachedChainWindow() const;
     // 返回当前实例正在播放的段名，供分段表现读取。
     FName GetCurrentActionSection() const;
     // 检查活动实例是否仍处于指定段之前。
@@ -39,6 +50,6 @@ private:
     FAnimMontageInstance* GetPlayingInstance() const;
     TWeakObjectPtr<UAnimInstance> PlayingAnimInstance;
     int32 MontageInstanceId = INDEX_NONE;
-    float BufferStart = 0.0f;
-    float BufferEnd = 0.0f;
+    FCombatAbilityWindow InputBuffer;
+    FCombatAbilityWindow ChainWindow;
 };

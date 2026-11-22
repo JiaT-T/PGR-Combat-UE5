@@ -20,11 +20,8 @@ export function resolveNanamiAction(combat: CombatComponent, command: string, ph
         if (command === "YellowOrb") {
             return form ? resolveYellowOrb(form, phase) : "";
         }
-        // 盾斧普攻另有整套动作，当前已接入的剑盾连段只在剑盾形态受理。
-        if (form?.GetWeaponForm() === ENanamiWeaponForm.ShieldAxe) {
-            return "";
-        }
-        return resolveBasicAttack(phase, combat.GetActiveActionId());
+        const shieldAxe = form?.GetWeaponForm() === ENanamiWeaponForm.ShieldAxe;
+        return resolveBasicAttack(phase, combat.GetActiveActionId(), shieldAxe);
     }
 
     if ((command === "RedOrb" || command === "BlueOrb") && phase === "Pressed") {

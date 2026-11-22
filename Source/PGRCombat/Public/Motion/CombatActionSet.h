@@ -5,6 +5,7 @@
 #include "CombatActionSet.generated.h"
 
 class UAnimMontage;
+class UCombatMontageAbility;
 
 USTRUCT(BlueprintType)
 struct PGRCOMBAT_API FCombatActionDefinition
@@ -37,4 +38,8 @@ class PGRCOMBAT_API UCombatActionSet : public UDataAsset
 public:
     UPROPERTY(EditAnywhere, Category = "Actions")
     TMap<FName, FCombatActionDefinition> Actions;
+
+    // 新招式绑定到独立 Ability 蓝图，播放和时间窗由该蓝图的 Task 配置。
+    UPROPERTY(EditAnywhere, Category = "Actions")
+    TMap<FName, TSubclassOf<UCombatMontageAbility>> Abilities;
 };

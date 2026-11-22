@@ -67,6 +67,10 @@ void APGRCombatCharacter::PawnClientRestart()
 // 从注册时的本地玩家移除战斗映射，并清除缓存的输入子系统。
 void APGRCombatCharacter::RemoveCombatMapping()
 {
+    if (Combat)
+    {
+        Combat->ClearBufferedInput();
+    }
     if (UNanamiFormComponent* Form = FindComponentByClass<UNanamiFormComponent>())
     {
         Form->CancelYellow();

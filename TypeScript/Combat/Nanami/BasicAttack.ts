@@ -1,20 +1,18 @@
-// 空闲时起手剑盾普攻，连按依次选择下一段，第四段自然收招。
-export function resolveBasicAttack(phase: string, activeActionId: string): string {
+const swordShieldCombo = ["Attack01", "Attack02", "Attack03", "Attack04"];
+const shieldAxeCombo = ["Attack61", "Attack62", "Attack63", "Attack64"];
+
+// 空闲时从当前形态的首段起手，同一套普攻依次续段，第四段自然收招。
+export function resolveBasicAttack(phase: string, activeActionId: string, shieldAxe: boolean): string {
     if (phase !== "Pressed") {
         return "";
     }
 
     // Puerts 以字符串传入 FName，匹配时沿用 UE 忽略大小写的规则。
-    switch (activeActionId.toLowerCase()) {
-        case "none":
-            return "Attack01";
-        case "attack01":
-            return "Attack02";
-        case "attack02":
-            return "Attack03";
-        case "attack03":
-            return "Attack04";
-        default:
-            return "";
+    const combo = shieldAxe ? shieldAxeCombo : swordShieldCombo;
+    const active = activeActionId.toLowerCase();
+    if (active === "none") {
+        return combo[0];
     }
+    const index = combo.findIndex(actionId => actionId.toLowerCase() === active);
+    return index >= 0 ? combo[index + 1] ?? "" : "";
 }
