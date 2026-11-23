@@ -28,6 +28,12 @@ public:
     bool PlayAction(FName ActionId, ECombatCommand Command, FOnMontageEnded OnEnded);
     // 查询本次按下应当被忽略、暂存，还是立即切到下一段。
     ECombatChainWindow GetChainWindow() const;
+    // 查询当前实例是否配置了专门接普攻的收势窗口，结束回调中仍可读取。
+    bool HasBasicFollowUp() const { return BasicFollowUpChain.StartSeconds < BasicFollowUpChain.EndSeconds; }
+    // 读取普攻专用窗口，其他指令沿用各自的衔接规则。
+    ECombatChainWindow GetBasicFollowUpWindow() const;
+    // 判断已缓存的普攻是否到达可混入下一招的起点。
+    bool HasReachedBasicFollowUpWindow() const;
     // 兼容已有的立即续段查询，提前输入区间不视作已经开窗。
     bool IsInputBufferOpen() const { return GetChainWindow() == ECombatChainWindow::Chain; }
     // 判断一次已缓存的输入是否随动画越过了允许切招的起点。
@@ -48,12 +54,15 @@ public:
     void StopAction();
 
 private:
-    // 仅访问本组件启动的实例，忽略旧 Montage 的淡出实例。
-    FAnimMontageInstance* GetPlayingInstance() const;
+    // 按实例 ID 取当前播放，收势窗口也可以读取该实例自然淡出时的播放位置。
+    FAnimMontageInstance* GetPlayingInstance(bool bIncludeNaturalBlendOut = false) const;
     TWeakObjectPtr<UAnimInstance> PlayingAnimInstance;
     int32 MontageInstanceId = INDEX_NONE;
     FName ExitSection = NAME_None;
     FCombatAbilityWindow InputBuffer;
     FCombatAbilityWindow ChainWindow;
+    FCombatAbilityWindow BasicFollowUpBuffer;
+    FCombatAbilityWindow BasicFollowUpChain;
+    bool bBlendingOutNaturally = false;
     bool bRequireFullPlayback = false;
 };
