@@ -86,7 +86,8 @@ private:
     FTimerHandle BasicHoldTimer;
     double BasicPressedAt = -1.0;
     FName TapActionAtPress = NAME_None;
-    bool bTapAcceptedAtPress = false;
+    // 轻击续段资格只属于开窗的实例，持续按住另由 BasicHoldTimer 识别。
+    int64 TapWindowInstanceId = 0;
 
     FName ActiveActionId = NAME_None;
     // 只在实例活动期间读取，区分同一指令的续段与高优先级技能打断。
