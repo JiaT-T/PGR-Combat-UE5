@@ -1,81 +1,51 @@
 #include "Motion/CombatMotionComponent.h"
 
 #include "Animation/AnimInstance.h"
+#include "Combat/NanamiFormComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/Character.h"
 #include "Motion/CombatActionSet.h"
 
 namespace
 {
-    // 将蓝图 Task 或旧版动作条目解析为此次播放使用的配置，两者各自只有一份数据来源。
-    bool ResolvePlayback(const UCombatMotionComponent& Motion, FName ActionId, FCombatActionDefinition& OutAction,
-        FCombatMontageTasks& OutTasks)
+    // 盾斧优先选用当前动作的形态变体，未配置变体的动作沿用默认 Ability。
+    const UCombatMontageAbility* FindAbility(const UCombatActionSet& Set, FName ActionId, const ACharacter& Character)
     {
-        if (!Motion.ActionSet)
+        const auto* Form = Character.FindComponentByClass<UNanamiFormComponent>();
+        if (Form && Form->GetWeaponForm() == ENanamiWeaponForm::ShieldAxe)
         {
-            return false;
-        }
-        if (const auto* AbilityClass = Motion.ActionSet->Abilities.Find(ActionId))
-        {
-            const UCombatMontageAbility* Ability = AbilityClass->GetDefaultObject();
-            if (!Ability || !Ability->ResolveTasks(OutTasks))
+            if (const auto* Variant = Set.ShieldAxeAbilities.Find(ActionId))
             {
-                return false;
+                return Variant->GetDefaultObject();
             }
-            OutAction.Command = Ability->Command;
-            OutAction.Montage = OutTasks.Montage;
-            return true;
         }
-
-        const FCombatActionDefinition* Legacy = Motion.ActionSet->Actions.Find(ActionId);
-        if (!Legacy || !Legacy->Montage)
-        {
-            return false;
-        }
-        OutAction = *Legacy;
-        const TObjectPtr<UAnimMontage>* Override = Motion.MontageOverrides.Find(ActionId);
-        if (Override && *Override)
-        {
-            OutAction.Montage = *Override;
-        }
-        return true;
+        const auto* Default = Set.Abilities.Find(ActionId);
+        return Default ? Default->GetDefaultObject() : nullptr;
     }
 }
 
 // 播放选定的蒙太奇，成功后用新段的混入时长淡出先前的动作。
 bool UCombatMotionComponent::PlayAction(FName ActionId, ECombatCommand Command, FOnMontageEnded OnEnded)
 {
-    FCombatActionDefinition Action;
-    FCombatMontageTasks Tasks;
     const ACharacter* Character = Cast<ACharacter>(GetOwner());
     UAnimInstance* AnimInstance = Character && Character->GetMesh() ? Character->GetMesh()->GetAnimInstance() : nullptr;
-    if (!AnimInstance || !ResolvePlayback(*this, ActionId, Action, Tasks) || !Action.Montage)
+    if (!AnimInstance || !ActionSet)
     {
         return false;
     }
-    if (Action.Command != Command)
+    const UCombatMontageAbility* Ability = FindAbility(*ActionSet, ActionId, *Character);
+    if (!Ability || Ability->Command != Command)
     {
         return false;
     }
-    if (!FMath::IsFinite(Action.PlayRate) || Action.PlayRate <= 0.0f)
+    FCombatMontageTasks Tasks;
+    if (!Ability->ResolveTasks(Tasks))
     {
         return false;
     }
 
-    UAnimMontage* Montage = Action.Montage.Get();
-    float Start = 0.0f;
-    float End = Montage->GetPlayLength();
-    if (!Action.Section.IsNone())
-    {
-        const int32 Index = Montage->GetSectionIndex(Action.Section);
-        if (Index == INDEX_NONE)
-        {
-            return false;
-        }
-        Montage->GetSectionStartAndEndTime(Index, Start, End);
-    }
-
-    if (AnimInstance->Montage_Play(Montage, Action.PlayRate, EMontagePlayReturnType::MontageLength, Start, false) <= 0.0f)
+    UAnimMontage* Montage = Tasks.Montage;
+    if (AnimInstance->Montage_Play(Montage, Tasks.PlayRate, EMontagePlayReturnType::MontageLength, Tasks.StartPosition, false) <= 0.0f)
     {
         return false;
     }
@@ -85,10 +55,10 @@ bool UCombatMotionComponent::PlayAction(FName ActionId, ECombatCommand Command, 
     {
         return false;
     }
-    if (!Action.Section.IsNone())
+    if (!Tasks.Section.IsNone())
     {
         // 一个 Section 可以对应一招，同一 Montage 的下一段由新输入驱动。
-        AnimInstance->Montage_SetNextSection(Action.Section, NAME_None, Montage);
+        AnimInstance->Montage_SetNextSection(Tasks.Section, NAME_None, Montage);
     }
 
     Instance->OnMontageEnded = MoveTemp(OnEnded);
@@ -96,14 +66,10 @@ bool UCombatMotionComponent::PlayAction(FName ActionId, ECombatCommand Command, 
     const int32 PreviousInstanceId = MontageInstanceId;
     PlayingAnimInstance = AnimInstance;
     MontageInstanceId = Instance->GetInstanceID();
+    ExitSection = Tasks.ExitSection;
     bRequireFullPlayback = Tasks.bRequireFullPlayback;
     InputBuffer = Tasks.InputBuffer;
     ChainWindow = Tasks.ChainWindow;
-    if (Action.InputBufferSeconds > 0.f)
-    {
-        ChainWindow.StartSeconds = FMath::Clamp(End - Action.InputBufferSeconds, Start, End);
-        ChainWindow.EndSeconds = End;
-    }
     if (PreviousAnimInstance)
     {
         FAnimMontageInstance* Previous = PreviousAnimInstance->GetMontageInstanceForID(PreviousInstanceId);
@@ -186,6 +152,7 @@ void UCombatMotionComponent::StopAction()
     UAnimInstance* AnimInstance = PlayingAnimInstance.Get();
     FAnimMontageInstance* Instance = AnimInstance ? AnimInstance->GetMontageInstanceForID(MontageInstanceId) : nullptr;
     MontageInstanceId = INDEX_NONE;
+    ExitSection = NAME_None;
     PlayingAnimInstance.Reset();
     if (Instance && Instance->IsActive())
     {

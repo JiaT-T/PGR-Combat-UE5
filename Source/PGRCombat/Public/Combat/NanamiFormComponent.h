@@ -4,7 +4,6 @@
 #include "Components/ActorComponent.h"
 #include "NanamiFormComponent.generated.h"
 
-class UAnimMontage;
 class UCombatComponent;
 class UCombatMotionComponent;
 
@@ -32,6 +31,9 @@ public:
 
     // 返回当前长按黄球所属的动作实例，动画蓝图按它区分收势与普通动作。
     int64 GetYellowHoldInstanceId() const { return HoldInstanceId; }
+
+    // 判断焚冲是否正处于本次 Ability 配置的收势段，供逐帧姿势过渡使用。
+    bool IsYellowHoldExitSection(FName Section) const;
 
     // 返回黄球和盾斧招式共用的星芒值。
     UFUNCTION(BlueprintPure, Category = "Form")
@@ -81,9 +83,6 @@ private:
     TObjectPtr<UCombatComponent> Combat;
     UPROPERTY(Transient)
     TObjectPtr<UCombatMotionComponent> Motion;
-    // 按原动作标识配置盾斧装备轨，红蓝球的技能结算继续共用同一动作。
-    UPROPERTY(EditDefaultsOnly, Category = "Form")
-    TMap<FName, TObjectPtr<UAnimMontage>> ShieldAxeMontages;
     UPROPERTY(EditDefaultsOnly, Category = "Training", meta = (ClampMin = "0", ClampMax = "100"))
     float InitialStarlight = 100.f;
     // 训练用输入阈值，单位为游戏秒。

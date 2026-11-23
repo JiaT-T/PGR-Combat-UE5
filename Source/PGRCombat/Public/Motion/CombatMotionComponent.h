@@ -24,10 +24,6 @@ public:
     UPROPERTY(EditAnywhere, Category = "Combat")
     TObjectPtr<UCombatActionSet> ActionSet = nullptr;
 
-    // 角色形态可替换指定动作的表现。指令、衔接窗口和实例回调仍来自原动作。
-    UPROPERTY(Transient)
-    TMap<FName, TObjectPtr<UAnimMontage>> MontageOverrides;
-
     // 尝试按动作标识播放动画，并在该实例结束时调用回调。
     bool PlayAction(FName ActionId, ECombatCommand Command, FOnMontageEnded OnEnded);
     // 查询本次按下应当被忽略、暂存，还是立即切到下一段。
@@ -42,6 +38,8 @@ public:
     bool RequiresFullPlayback() const { return bRequireFullPlayback; }
     // 返回当前实例正在播放的段名，供分段表现读取。
     FName GetCurrentActionSection() const;
+    // 取得本次播放配置指定的收势段。
+    FName GetExitSection() const { return ExitSection; }
     // 检查活动实例是否仍处于指定段之前。
     bool IsBeforeActionSection(FName Section) const;
     // 仅向前跳到指定段，重复请求不会重播已经开始的段。
@@ -54,6 +52,7 @@ private:
     FAnimMontageInstance* GetPlayingInstance() const;
     TWeakObjectPtr<UAnimInstance> PlayingAnimInstance;
     int32 MontageInstanceId = INDEX_NONE;
+    FName ExitSection = NAME_None;
     FCombatAbilityWindow InputBuffer;
     FCombatAbilityWindow ChainWindow;
     bool bRequireFullPlayback = false;

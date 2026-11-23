@@ -11,8 +11,6 @@ namespace
     const FName SwordToAxe(TEXT("YellowSwordToAxe"));
     const FName AxeToSword(TEXT("YellowAxeToSword"));
     const FName YellowHold(TEXT("YellowHold"));
-    const FName LastAttackSection(TEXT("Attack47"));
-    const FName ReturnSection(TEXT("Attack48"));
 }
 
 // 平时关闭组件 Tick，焚冲开始后才推进星芒消耗。
@@ -85,16 +83,21 @@ void UNanamiFormComponent::TickComponent(float DeltaTime, ELevelTick TickType, F
         return;
     }
 
-    const FName Section = Motion->GetCurrentActionSection();
-    if (Section == LastAttackSection || Motion->IsBeforeActionSection(LastAttackSection))
+    if (Motion->IsBeforeActionSection(Motion->GetExitSection()))
     {
         ConsumeStarlight(StarlightDrainPerSecond * DeltaTime);
     }
-    else if (Section == ReturnSection)
+    else if (IsYellowHoldExitSection(Motion->GetCurrentActionSection()))
     {
         SetWeaponForm(ENanamiWeaponForm::SwordShield);
         SetComponentTickEnabled(false);
     }
+}
+
+// 校验当前焚冲实例并匹配其 Ability 指定的收势段。
+bool UNanamiFormComponent::IsYellowHoldExitSection(FName Section) const
+{
+    return HoldInstanceId != 0 && Motion && !Section.IsNone() && Section == Motion->GetExitSection();
 }
 
 // 每次真正的按下只建立一个计时器，收刀期间忽略新的手势。
@@ -151,7 +154,7 @@ void UNanamiFormComponent::RequestYellowExit()
 {
     if (HoldInstanceId != 0 && Combat && Combat->GetActiveInstanceId() == HoldInstanceId && Motion)
     {
-        Motion->JumpForwardToActionSection(ReturnSection);
+        Motion->JumpForwardToActionSection(Motion->GetExitSection());
     }
 }
 
@@ -191,17 +194,6 @@ void UNanamiFormComponent::SetWeaponForm(ENanamiWeaponForm NewForm)
     if (WeaponForm != NewForm)
     {
         WeaponForm = NewForm;
-        if (Motion)
-        {
-            if (NewForm == ENanamiWeaponForm::ShieldAxe)
-            {
-                Motion->MontageOverrides = ShieldAxeMontages;
-            }
-            else
-            {
-                Motion->MontageOverrides.Reset();
-            }
-        }
         OnWeaponFormChanged.Broadcast(NewForm);
     }
 }

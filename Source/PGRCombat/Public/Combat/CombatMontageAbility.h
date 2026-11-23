@@ -19,9 +19,19 @@ class PGRCOMBAT_API UCombatPlayMontageTask : public UCombatAbilityTask
     GENERATED_BODY()
 
 public:
-    // 从头以原速播放完整动作。
+    // 默认从起点播放整段 Montage；选择 Section 时只播放指定段。
     UPROPERTY(EditAnywhere, Category = "Task")
     TObjectPtr<UAnimMontage> Montage = nullptr;
+
+    UPROPERTY(EditAnywhere, Category = "Task")
+    FName Section = NAME_None;
+
+    // 可主动提前结束攻击的 Montage 在这里指定收势段。
+    UPROPERTY(EditAnywhere, Category = "Task")
+    FName ExitSection = NAME_None;
+
+    UPROPERTY(EditAnywhere, Category = "Task", meta = (ClampMin = "0.01"))
+    float PlayRate = 1.f;
 };
 
 UCLASS(Abstract)
@@ -66,6 +76,10 @@ struct FCombatAbilityWindow
 struct FCombatMontageTasks
 {
     UAnimMontage* Montage = nullptr;
+    FName Section = NAME_None;
+    FName ExitSection = NAME_None;
+    float StartPosition = 0.f;
+    float PlayRate = 1.f;
     bool bRequireFullPlayback = false;
     FCombatAbilityWindow InputBuffer;
     FCombatAbilityWindow ChainWindow;
