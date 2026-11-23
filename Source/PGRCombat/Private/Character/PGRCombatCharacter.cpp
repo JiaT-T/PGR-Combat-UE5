@@ -67,6 +67,11 @@ void APGRCombatCharacter::PawnClientRestart()
 // 从注册时的本地玩家移除战斗映射，并清除缓存的输入子系统。
 void APGRCombatCharacter::RemoveCombatMapping()
 {
+    if (Combat)
+    {
+        Combat->ClearBufferedInput();
+        Combat->SubmitInput(ECombatCommand::BasicAttack, ECombatInputPhase::Canceled);
+    }
     if (UNanamiFormComponent* Form = FindComponentByClass<UNanamiFormComponent>())
     {
         Form->CancelYellow();
@@ -84,6 +89,12 @@ void APGRCombatCharacter::UnPossessed()
 {
     RemoveCombatMapping();
     Super::UnPossessed();
+}
+
+// 锁定期间暂停普通移动输入，完整收招后恢复常规控制。
+bool APGRCombatCharacter::IsMoveInputIgnored() const
+{
+    return (Combat && Combat->IsActionLocked()) || Super::IsMoveInputIgnored();
 }
 
 // 角色退出世界前，清理仍在本地玩家上生效的映射。

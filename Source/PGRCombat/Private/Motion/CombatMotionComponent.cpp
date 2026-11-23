@@ -5,32 +5,69 @@
 #include "GameFramework/Character.h"
 #include "Motion/CombatActionSet.h"
 
+namespace
+{
+    // 将蓝图 Task 或旧版动作条目解析为此次播放使用的配置，两者各自只有一份数据来源。
+    bool ResolvePlayback(const UCombatMotionComponent& Motion, FName ActionId, FCombatActionDefinition& OutAction,
+        FCombatMontageTasks& OutTasks)
+    {
+        if (!Motion.ActionSet)
+        {
+            return false;
+        }
+        if (const auto* AbilityClass = Motion.ActionSet->Abilities.Find(ActionId))
+        {
+            const UCombatMontageAbility* Ability = AbilityClass->GetDefaultObject();
+            if (!Ability || !Ability->ResolveTasks(OutTasks))
+            {
+                return false;
+            }
+            OutAction.Command = Ability->Command;
+            OutAction.Montage = OutTasks.Montage;
+            return true;
+        }
+
+        const FCombatActionDefinition* Legacy = Motion.ActionSet->Actions.Find(ActionId);
+        if (!Legacy || !Legacy->Montage)
+        {
+            return false;
+        }
+        OutAction = *Legacy;
+        const TObjectPtr<UAnimMontage>* Override = Motion.MontageOverrides.Find(ActionId);
+        if (Override && *Override)
+        {
+            OutAction.Montage = *Override;
+        }
+        return true;
+    }
+}
+
 // 播放选定的蒙太奇，成功后用新段的混入时长淡出先前的动作。
 bool UCombatMotionComponent::PlayAction(FName ActionId, ECombatCommand Command, FOnMontageEnded OnEnded)
 {
-    const FCombatActionDefinition* Action = ActionSet ? ActionSet->Actions.Find(ActionId) : nullptr;
+    FCombatActionDefinition Action;
+    FCombatMontageTasks Tasks;
     const ACharacter* Character = Cast<ACharacter>(GetOwner());
     UAnimInstance* AnimInstance = Character && Character->GetMesh() ? Character->GetMesh()->GetAnimInstance() : nullptr;
-    if (!Action || !Action->Montage || !AnimInstance)
+    if (!AnimInstance || !ResolvePlayback(*this, ActionId, Action, Tasks) || !Action.Montage)
     {
         return false;
     }
-    if (Action->Command != Command)
+    if (Action.Command != Command)
     {
         return false;
     }
-    if (!FMath::IsFinite(Action->PlayRate) || Action->PlayRate <= 0.0f)
+    if (!FMath::IsFinite(Action.PlayRate) || Action.PlayRate <= 0.0f)
     {
         return false;
     }
 
-    const TObjectPtr<UAnimMontage>* Override = MontageOverrides.Find(ActionId);
-    UAnimMontage* Montage = Override && *Override ? Override->Get() : Action->Montage.Get();
+    UAnimMontage* Montage = Action.Montage.Get();
     float Start = 0.0f;
     float End = Montage->GetPlayLength();
-    if (!Action->Section.IsNone())
+    if (!Action.Section.IsNone())
     {
-        const int32 Index = Montage->GetSectionIndex(Action->Section);
+        const int32 Index = Montage->GetSectionIndex(Action.Section);
         if (Index == INDEX_NONE)
         {
             return false;
@@ -38,7 +75,7 @@ bool UCombatMotionComponent::PlayAction(FName ActionId, ECombatCommand Command, 
         Montage->GetSectionStartAndEndTime(Index, Start, End);
     }
 
-    if (AnimInstance->Montage_Play(Montage, Action->PlayRate, EMontagePlayReturnType::MontageLength, Start, false) <= 0.0f)
+    if (AnimInstance->Montage_Play(Montage, Action.PlayRate, EMontagePlayReturnType::MontageLength, Start, false) <= 0.0f)
     {
         return false;
     }
@@ -48,10 +85,10 @@ bool UCombatMotionComponent::PlayAction(FName ActionId, ECombatCommand Command, 
     {
         return false;
     }
-    if (!Action->Section.IsNone())
+    if (!Action.Section.IsNone())
     {
         // 一个 Section 可以对应一招，同一 Montage 的下一段由新输入驱动。
-        AnimInstance->Montage_SetNextSection(Action->Section, NAME_None, Montage);
+        AnimInstance->Montage_SetNextSection(Action.Section, NAME_None, Montage);
     }
 
     Instance->OnMontageEnded = MoveTemp(OnEnded);
@@ -59,8 +96,14 @@ bool UCombatMotionComponent::PlayAction(FName ActionId, ECombatCommand Command, 
     const int32 PreviousInstanceId = MontageInstanceId;
     PlayingAnimInstance = AnimInstance;
     MontageInstanceId = Instance->GetInstanceID();
-    BufferEnd = End;
-    BufferStart = FMath::Clamp(End - Action->InputBufferSeconds, Start, End);
+    bRequireFullPlayback = Tasks.bRequireFullPlayback;
+    InputBuffer = Tasks.InputBuffer;
+    ChainWindow = Tasks.ChainWindow;
+    if (Action.InputBufferSeconds > 0.f)
+    {
+        ChainWindow.StartSeconds = FMath::Clamp(End - Action.InputBufferSeconds, Start, End);
+        ChainWindow.EndSeconds = End;
+    }
     if (PreviousAnimInstance)
     {
         FAnimMontageInstance* Previous = PreviousAnimInstance->GetMontageInstanceForID(PreviousInstanceId);
@@ -72,11 +115,38 @@ bool UCombatMotionComponent::PlayAction(FName ActionId, ECombatCommand Command, 
     return true;
 }
 
-// 用当前蒙太奇实例的本地播放位置判断是否允许立即续段。
-bool UCombatMotionComponent::IsInputBufferOpen() const
+// 先检查直接续段，再接收早按；经过最后一个窗口后的新输入始终被拒绝。
+ECombatChainWindow UCombatMotionComponent::GetChainWindow() const
 {
     const FAnimMontageInstance* Instance = GetPlayingInstance();
-    return Instance && BufferStart < BufferEnd && Instance->GetPosition() >= BufferStart && Instance->GetPosition() <= BufferEnd;
+    if (!Instance)
+    {
+        return ECombatChainWindow::Closed;
+    }
+    const float Position = Instance->GetPosition();
+    if (ChainWindow.Contains(Position))
+    {
+        return ECombatChainWindow::Chain;
+    }
+    if (Position < ChainWindow.StartSeconds && InputBuffer.Contains(Position))
+    {
+        return ECombatChainWindow::Buffer;
+    }
+    return ECombatChainWindow::Closed;
+}
+
+// 缓存只会在切招起点之前建立，跨帧跳过窄窗口时仍能消费已按下的输入。
+bool UCombatMotionComponent::HasReachedChainWindow() const
+{
+    const FAnimMontageInstance* Instance = GetPlayingInstance();
+    return Instance && Instance->GetPosition() >= ChainWindow.StartSeconds;
+}
+
+// 仅当本段还会经过衔接窗口时提前排入下一招。
+bool UCombatMotionComponent::IsBeforeChainWindow() const
+{
+    const FAnimMontageInstance* Instance = GetPlayingInstance();
+    return Instance && ChainWindow.StartSeconds < ChainWindow.EndSeconds && Instance->GetPosition() < ChainWindow.StartSeconds;
 }
 
 // 按已记录的实例编号定位动画，拒绝访问已结束的实例。
