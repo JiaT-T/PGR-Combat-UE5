@@ -15,8 +15,8 @@ export interface CombatComponent {
 
 // 按输入指令分派七实的动作规则，未知指令返回空动作。
 export function resolveNanamiAction(combat: CombatComponent, command: string, phase: string): string {
+    const form = combat.GetOwner().GetComponentByClass<NanamiForm>(NanamiFormComponent.StaticClass());
     if (command === "BasicAttack" || command === "YellowOrb") {
-        const form = combat.GetOwner().GetComponentByClass<NanamiForm>(NanamiFormComponent.StaticClass());
         if (command === "YellowOrb") {
             return form ? resolveYellowOrb(form, phase) : "";
         }
@@ -25,6 +25,9 @@ export function resolveNanamiAction(combat: CombatComponent, command: string, ph
     }
 
     if ((command === "RedOrb" || command === "BlueOrb") && phase === "Pressed") {
+        if (!form?.CanUseRedBlueOrbs()) {
+            return "";
+        }
         const orbs = combat.GetOwner().GetComponentByClass<NanamiOrbComponent>(OrbComponentClass.StaticClass());
         const color = command === "RedOrb" ? ENanamiOrbColor.Red : ENanamiOrbColor.Blue;
         return resolveSignalOrb(orbs?.GetOrbState(), color);

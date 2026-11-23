@@ -3,6 +3,8 @@ import { ENanamiWeaponForm } from "ue";
 export interface NanamiForm {
     // 读取已生效的剑盾或盾斧形态。
     GetWeaponForm(): ENanamiWeaponForm;
+    // 查询当前形态是否允许发动红球和蓝球。
+    CanUseRedBlueOrbs(): boolean;
     // 获取当前剩余星芒。
     GetStarlight(): number;
     // 查询本次重新按住是否达到发起焚冲的条件。

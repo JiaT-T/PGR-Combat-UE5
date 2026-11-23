@@ -29,6 +29,10 @@ public:
     UFUNCTION(BlueprintPure, Category = "Form")
     ENanamiWeaponForm GetWeaponForm() const { return WeaponForm; }
 
+    // 选招与 HUD 共用的形态许可，库存和二段资格由信号球组件管理。
+    UFUNCTION(BlueprintPure, Category = "Form")
+    bool CanUseRedBlueOrbs() const { return WeaponForm == ENanamiWeaponForm::SwordShield; }
+
     // 返回当前长按黄球所属的动作实例，动画蓝图按它区分收势与普通动作。
     int64 GetYellowHoldInstanceId() const { return HoldInstanceId; }
 
