@@ -4,15 +4,15 @@
 
 namespace
 {
-    // 可选窗口缺席时保留空区间，已添加的窗口必须完整落在 Montage 上。
-    bool ReadWindow(const UCombatWindowTask* Task, float Length, FCombatAbilityWindow& OutWindow)
+    // 窗口使用 Montage 的绝对播放位置，且必须完整落在本次实际播放的范围内。
+    bool ReadWindow(const UCombatWindowTask* Task, float Start, float End, FCombatAbilityWindow& OutWindow)
     {
         if (!Task)
         {
             return true;
         }
-        if (!(Task->StartSeconds >= 0.f && Task->StartSeconds < Task->EndSeconds
-            && Task->EndSeconds <= Length + UE_KINDA_SMALL_NUMBER))
+        if (!(Task->StartSeconds >= Start - UE_KINDA_SMALL_NUMBER && Task->StartSeconds >= 0.f
+            && Task->StartSeconds < Task->EndSeconds && Task->EndSeconds <= End + UE_KINDA_SMALL_NUMBER))
         {
             return false;
         }
@@ -32,11 +32,14 @@ bool UCombatMontageAbility::ResolveTasks(FCombatMontageTasks& OutTasks) const
     {
         if (const auto* Play = Cast<UCombatPlayMontageTask>(Task))
         {
-            if (Resolved.Montage || !Play->Montage)
+            if (Resolved.Montage || !Play->Montage || !FMath::IsFinite(Play->PlayRate) || Play->PlayRate <= 0.f)
             {
                 return false;
             }
             Resolved.Montage = Play->Montage;
+            Resolved.PlayRate = Play->PlayRate;
+            Resolved.Section = Play->Section;
+            Resolved.ExitSection = Play->ExitSection;
         }
         else if (const auto* Input = Cast<UCombatInputBufferTask>(Task))
         {
@@ -63,8 +66,22 @@ bool UCombatMontageAbility::ResolveTasks(FCombatMontageTasks& OutTasks) const
     {
         return false;
     }
-    const float Length = Resolved.Montage->GetPlayLength();
-    if (!ReadWindow(Buffer, Length, Resolved.InputBuffer) || !ReadWindow(Chain, Length, Resolved.ChainWindow))
+    float EndPosition = Resolved.Montage->GetPlayLength();
+    if (!Resolved.Section.IsNone())
+    {
+        const int32 Index = Resolved.Montage->GetSectionIndex(Resolved.Section);
+        if (Index == INDEX_NONE || !Resolved.ExitSection.IsNone())
+        {
+            return false;
+        }
+        Resolved.Montage->GetSectionStartAndEndTime(Index, Resolved.StartPosition, EndPosition);
+    }
+    if (!Resolved.ExitSection.IsNone() && Resolved.Montage->GetSectionIndex(Resolved.ExitSection) == INDEX_NONE)
+    {
+        return false;
+    }
+    if (!ReadWindow(Buffer, Resolved.StartPosition, EndPosition, Resolved.InputBuffer)
+        || !ReadWindow(Chain, Resolved.StartPosition, EndPosition, Resolved.ChainWindow))
     {
         return false;
     }
