@@ -26,6 +26,7 @@ bool UCombatMontageAbility::ResolveTasks(FCombatMontageTasks& OutTasks) const
 {
     const UCombatInputBufferTask* Buffer = nullptr;
     const UCombatChainWindowTask* Chain = nullptr;
+    const UCombatBasicFollowUpTask* Basic = nullptr;
     FCombatMontageTasks Resolved;
     Resolved.bRequireFullPlayback = bRequireFullPlayback;
     for (const UCombatAbilityTask* Task : Tasks)
@@ -56,6 +57,14 @@ bool UCombatMontageAbility::ResolveTasks(FCombatMontageTasks& OutTasks) const
                 return false;
             }
             Chain = Window;
+        }
+        else if (const auto* FollowUp = Cast<UCombatBasicFollowUpTask>(Task))
+        {
+            if (Basic)
+            {
+                return false;
+            }
+            Basic = FollowUp;
         }
         else
         {
@@ -89,6 +98,17 @@ bool UCombatMontageAbility::ResolveTasks(FCombatMontageTasks& OutTasks) const
     if (!Chain)
     {
         Resolved.ChainWindow = Resolved.InputBuffer;
+    }
+    if (Basic)
+    {
+        if (!(Basic->BufferStartSeconds >= 0.f && Basic->BufferStartSeconds >= Resolved.StartPosition - UE_KINDA_SMALL_NUMBER
+            && Basic->BufferStartSeconds <= Basic->ChainStartSeconds && Basic->ChainStartSeconds < Basic->EndSeconds
+            && Basic->EndSeconds <= EndPosition + UE_KINDA_SMALL_NUMBER))
+        {
+            return false;
+        }
+        Resolved.BasicFollowUpBuffer = { Basic->BufferStartSeconds, Basic->ChainStartSeconds };
+        Resolved.BasicFollowUpChain = { Basic->ChainStartSeconds, Basic->EndSeconds };
     }
     OutTasks = Resolved;
     return true;

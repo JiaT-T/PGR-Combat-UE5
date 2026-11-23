@@ -22,6 +22,26 @@ namespace
         const auto* Default = Set.Abilities.Find(ActionId);
         return Default ? Default->GetDefaultObject() : nullptr;
     }
+
+    // 按当前播放位置区分提前按下和即按即切，关窗后的新按键直接忽略。
+    ECombatChainWindow ReadChainWindow(const FAnimMontageInstance* Instance,
+        const FCombatAbilityWindow& Buffer, const FCombatAbilityWindow& Chain)
+    {
+        if (!Instance)
+        {
+            return ECombatChainWindow::Closed;
+        }
+        const float Position = Instance->GetPosition();
+        if (Chain.Contains(Position))
+        {
+            return ECombatChainWindow::Chain;
+        }
+        if (Position < Chain.StartSeconds && Buffer.Contains(Position))
+        {
+            return ECombatChainWindow::Buffer;
+        }
+        return ECombatChainWindow::Closed;
+    }
 }
 
 // 播放选定的蒙太奇，成功后用新段的混入时长淡出先前的动作。
@@ -66,10 +86,21 @@ bool UCombatMotionComponent::PlayAction(FName ActionId, ECombatCommand Command, 
     const int32 PreviousInstanceId = MontageInstanceId;
     PlayingAnimInstance = AnimInstance;
     MontageInstanceId = Instance->GetInstanceID();
+    bBlendingOutNaturally = false;
+    // UE 在自然淡出开始时就把实例标为非活动，此时收势窗口仍可能接受普攻。
+    Instance->OnMontageBlendingOutStarted.BindWeakLambda(this, [this, Id = MontageInstanceId](UAnimMontage*, bool bInterrupted)
+    {
+        if (MontageInstanceId == Id)
+        {
+            bBlendingOutNaturally = !bInterrupted;
+        }
+    });
     ExitSection = Tasks.ExitSection;
     bRequireFullPlayback = Tasks.bRequireFullPlayback;
     InputBuffer = Tasks.InputBuffer;
     ChainWindow = Tasks.ChainWindow;
+    BasicFollowUpBuffer = Tasks.BasicFollowUpBuffer;
+    BasicFollowUpChain = Tasks.BasicFollowUpChain;
     if (PreviousAnimInstance)
     {
         FAnimMontageInstance* Previous = PreviousAnimInstance->GetMontageInstanceForID(PreviousInstanceId);
@@ -84,21 +115,20 @@ bool UCombatMotionComponent::PlayAction(FName ActionId, ECombatCommand Command, 
 // 先检查直接续段，再接收早按；经过最后一个窗口后的新输入始终被拒绝。
 ECombatChainWindow UCombatMotionComponent::GetChainWindow() const
 {
-    const FAnimMontageInstance* Instance = GetPlayingInstance();
-    if (!Instance)
-    {
-        return ECombatChainWindow::Closed;
-    }
-    const float Position = Instance->GetPosition();
-    if (ChainWindow.Contains(Position))
-    {
-        return ECombatChainWindow::Chain;
-    }
-    if (Position < ChainWindow.StartSeconds && InputBuffer.Contains(Position))
-    {
-        return ECombatChainWindow::Buffer;
-    }
-    return ECombatChainWindow::Closed;
+    return ReadChainWindow(GetPlayingInstance(), InputBuffer, ChainWindow);
+}
+
+// 允许普攻专用窗口延伸至本次 Montage 的自然淡出。
+ECombatChainWindow UCombatMotionComponent::GetBasicFollowUpWindow() const
+{
+    return ReadChainWindow(GetPlayingInstance(true), BasicFollowUpBuffer, BasicFollowUpChain);
+}
+
+// 已接受的普攻输入在跨帧经过切招点时仍然有效。
+bool UCombatMotionComponent::HasReachedBasicFollowUpWindow() const
+{
+    const FAnimMontageInstance* Instance = GetPlayingInstance(true);
+    return HasBasicFollowUp() && Instance && Instance->GetPosition() >= BasicFollowUpChain.StartSeconds;
 }
 
 // 缓存只会在切招起点之前建立，跨帧跳过窄窗口时仍能消费已按下的输入。
@@ -116,11 +146,12 @@ bool UCombatMotionComponent::IsBeforeChainWindow() const
 }
 
 // 按已记录的实例编号定位动画，拒绝访问已结束的实例。
-FAnimMontageInstance* UCombatMotionComponent::GetPlayingInstance() const
+FAnimMontageInstance* UCombatMotionComponent::GetPlayingInstance(bool bIncludeNaturalBlendOut) const
 {
     UAnimInstance* Anim = PlayingAnimInstance.Get();
     FAnimMontageInstance* Instance = Anim ? Anim->GetMontageInstanceForID(MontageInstanceId) : nullptr;
-    return Instance && Instance->IsActive() ? Instance : nullptr;
+    return Instance && Instance->IsValid() && (!Instance->IsStopped() || (bIncludeNaturalBlendOut && bBlendingOutNaturally))
+        ? Instance : nullptr;
 }
 
 // 获取当前实际播放的 Section，供武器和动作状态同步。
@@ -153,6 +184,9 @@ void UCombatMotionComponent::StopAction()
     FAnimMontageInstance* Instance = AnimInstance ? AnimInstance->GetMontageInstanceForID(MontageInstanceId) : nullptr;
     MontageInstanceId = INDEX_NONE;
     ExitSection = NAME_None;
+    BasicFollowUpBuffer = {};
+    BasicFollowUpChain = {};
+    bBlendingOutNaturally = false;
     PlayingAnimInstance.Reset();
     if (Instance && Instance->IsActive())
     {

@@ -21,9 +21,13 @@ public:
     // 取消挂在当前实例上的提前输入，角色失去控制时也要清理。
     void ClearBufferedInput();
 
-    // 当前实例锁定动作时，拒绝新指令、普通打断与移动输入。
+    // 当前实例锁定普通打断与移动，只有显式配置的轻击衔接可以接管。
     UFUNCTION(BlueprintPure, Category = "Combat")
     bool IsActionLocked() const;
+
+    // 当前动作是否配置了接普攻的专用窗口，供脚本选择当前形态的首段。
+    UFUNCTION(BlueprintPure, Category = "Combat")
+    bool HasBasicFollowUp() const;
 
     // 提交带有按键阶段的指令，并返回本次受理结果。
     UFUNCTION(BlueprintCallable, Category = "Combat")

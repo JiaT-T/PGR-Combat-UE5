@@ -60,6 +60,25 @@ class PGRCOMBAT_API UCombatChainWindowTask : public UCombatWindowTask
     GENERATED_BODY()
 };
 
+// 允许从本招的收势接普攻。三个时间点均从完整 Montage 起点算起。
+UCLASS(meta = (DisplayName = "Basic Attack Follow-up"))
+class PGRCOMBAT_API UCombatBasicFollowUpTask : public UCombatAbilityTask
+{
+    GENERATED_BODY()
+
+public:
+    // 从此处开始接收提前按下的普攻。
+    UPROPERTY(EditAnywhere, Category = "Task", meta = (ClampMin = "0", Units = "s"))
+    float BufferStartSeconds = 0.f;
+
+    // 从此处起消费缓存，或在按下普攻时立即混入下一招。
+    UPROPERTY(EditAnywhere, Category = "Task", meta = (ClampMin = "0", Units = "s"))
+    float ChainStartSeconds = 0.f;
+
+    UPROPERTY(EditAnywhere, Category = "Task", meta = (ClampMin = "0", Units = "s"))
+    float EndSeconds = 0.f;
+};
+
 // 解析后的窗口快照属于播放实例，默认空区间不会接收输入。
 struct FCombatAbilityWindow
 {
@@ -83,6 +102,8 @@ struct FCombatMontageTasks
     bool bRequireFullPlayback = false;
     FCombatAbilityWindow InputBuffer;
     FCombatAbilityWindow ChainWindow;
+    FCombatAbilityWindow BasicFollowUpBuffer;
+    FCombatAbilityWindow BasicFollowUpChain;
 };
 
 // 每个子蓝图配置一招。类默认值只保存编排，每次播放和缓存的状态属于角色。
@@ -95,7 +116,7 @@ public:
     UPROPERTY(EditDefaultsOnly, Category = "Ability")
     ECombatCommand Command = ECombatCommand::BasicAttack;
 
-    // 选中时，普通输入和移动必须等待本实例完整收招。
+    // 锁住普通输入和移动直至动作结束。配置了普攻衔接 Task 时，仅在其窗口内放行普攻。
     UPROPERTY(EditDefaultsOnly, Category = "Ability")
     bool bRequireFullPlayback = false;
 
