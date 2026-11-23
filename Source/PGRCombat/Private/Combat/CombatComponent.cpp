@@ -139,7 +139,7 @@ ECombatInputResult UCombatComponent::BeginBasicPress(FName TapAction)
     }
     // 首段已经发动，松手只结束手势；若持续按住，达到阈值后按首段的衔接窗转重击。
     TapActionAtPress = bIdleLight ? NAME_None : TapAction;
-    bTapAcceptedAtPress = !bIdleLight && Motion->GetChainWindow() != ECombatChainWindow::Closed;
+    TapWindowInstanceId = !bIdleLight && Motion->GetChainWindow() != ECombatChainWindow::Closed ? ActiveInstanceId : 0;
     BasicPressedAt = GetWorld()->GetTimeSeconds();
     GetWorld()->GetTimerManager().SetTimer(BasicHoldTimer, this, &ThisClass::ConfirmBasicHold, BasicHoldThresholdSeconds, false);
     return bIdleLight ? ECombatInputResult::Started : ECombatInputResult::Buffered;
@@ -150,7 +150,7 @@ ECombatInputResult UCombatComponent::ReleaseBasicPress()
 {
     const bool bHeld = GetWorld()->GetTimeSeconds() - BasicPressedAt >= BasicHoldThresholdSeconds;
     const FName TapAction = TapActionAtPress;
-    const bool bAccepted = bTapAcceptedAtPress;
+    const bool bAccepted = TapWindowInstanceId != 0 && TapWindowInstanceId == ActiveInstanceId;
     ResetBasicPress();
     if (bHeld)
     {
@@ -184,6 +184,7 @@ void UCombatComponent::ResetBasicPress()
 {
     BasicPressedAt = -1.0;
     TapActionAtPress = NAME_None;
+    TapWindowInstanceId = 0;
     GetWorld()->GetTimerManager().ClearTimer(BasicHoldTimer);
 }
 
