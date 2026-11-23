@@ -63,6 +63,9 @@ private:
     UPROPERTY(EditDefaultsOnly, Category = "Combat|Input")
     TObjectPtr<UInputAction> BlueOrbAction;
 
+    UPROPERTY(EditDefaultsOnly, Category = "Combat|Input")
+    TObjectPtr<UInputAction> YellowOrbAction;
+
     UPROPERTY(EditDefaultsOnly, Category = "Combat|Presentation")
     TObjectPtr<USkeletalMesh> FighterMesh;
 

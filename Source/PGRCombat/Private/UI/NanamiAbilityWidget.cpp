@@ -1,6 +1,7 @@
 #include "UI/NanamiAbilityWidget.h"
 
 #include "Combat/NanamiOrbComponent.h"
+#include "Combat/NanamiFormComponent.h"
 #include "Components/Image.h"
 #include "Components/TextBlock.h"
 #include "GameFramework/Pawn.h"
@@ -40,6 +41,11 @@ void UNanamiAbilityWidget::NativeDestruct()
     }
     ControllerSource.Reset();
     OrbSource.Reset();
+    if (UNanamiFormComponent* Form = FormSource.Get())
+    {
+        Form->OnWeaponFormChanged.RemoveDynamic(this, &ThisClass::RefreshForm);
+    }
+    FormSource.Reset();
     Super::NativeDestruct();
 }
 
@@ -51,12 +57,32 @@ void UNanamiAbilityWidget::OnPossessedPawnChanged(APawn* OldPawn, APawn* NewPawn
         Previous->OnOrbStateChanged.RemoveDynamic(this, &ThisClass::RefreshOrbs);
     }
     UNanamiOrbComponent* Orbs = NewPawn ? NewPawn->FindComponentByClass<UNanamiOrbComponent>() : nullptr;
+    if (UNanamiFormComponent* Previous = FormSource.Get())
+    {
+        Previous->OnWeaponFormChanged.RemoveDynamic(this, &ThisClass::RefreshForm);
+    }
+    FormSource = NewPawn ? NewPawn->FindComponentByClass<UNanamiFormComponent>() : nullptr;
+    if (UNanamiFormComponent* Form = FormSource.Get())
+    {
+        Form->OnWeaponFormChanged.AddUniqueDynamic(this, &ThisClass::RefreshForm);
+        RefreshForm(Form->GetWeaponForm());
+    }
     OrbSource = Orbs;
     SetVisibility(DisplayWhen(Orbs != nullptr));
     if (Orbs)
     {
         Orbs->OnOrbStateChanged.AddUniqueDynamic(this, &ThisClass::RefreshOrbs);
         RefreshOrbs(Orbs->GetOrbState());
+    }
+}
+
+// 使用当前拥有角色的持械形态选择一张黄球图。
+void UNanamiAbilityWidget::RefreshForm(ENanamiWeaponForm Form)
+{
+    if (YellowOrbIcon && YellowOrbAlternate)
+    {
+        YellowOrbIcon->SetVisibility(DisplayWhen(Form == ENanamiWeaponForm::SwordShield));
+        YellowOrbAlternate->SetVisibility(DisplayWhen(Form == ENanamiWeaponForm::ShieldAxe));
     }
 }
 
