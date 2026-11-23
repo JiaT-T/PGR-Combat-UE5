@@ -1,8 +1,6 @@
 # PGR Combat UE5
 
-**试玩七实的剑盾四段普攻。** 打开 `/Game/Maps/Training/Nanami/L_NanamiTraining` 并进入游戏，连续点按 **J** 或 **鼠标左键**，依次打出 `Attack01 → Attack02 → Attack03 → Attack04`。第三段抛盾、展剑；第四段跃起下劈，收刀时盾回手。四段按原速播放。[连段验证](docs/validation.md#剑盾四段普攻与武器动作)
-
-**试玩第一段普攻。** 在默认地图 `/Game/Maps/Training/TrainingFighter/L_CombatTraining` 中点击播放，按 **J** 或 **鼠标左键**。TS 为剑盾普攻选择 `Attack01`，角色挥剑并自然收招，随后可再次输入。当前角色与动作是原创占位素材，一次挥击约 0.90 秒。第一次打开工程前请完成下方的插件恢复与 TS 构建。
+**试玩七实的剑盾四段普攻。** 双击 Windows 试玩程序或在编辑器中按播放，默认进入 `/Game/Maps/Training/Nanami/L_NanamiTraining`，连续点按 **J** 或 **鼠标左键**，依次打出 `Attack01 → Attack02 → Attack03 → Attack04`。第三段抛盾、展剑；第四段跃起下劈，收刀时盾回手。四段按原速播放。[连段验证](docs/validation.md#剑盾四段普攻与武器动作)
 
 | 从这里进入 | 内容 |
 |---|---|
