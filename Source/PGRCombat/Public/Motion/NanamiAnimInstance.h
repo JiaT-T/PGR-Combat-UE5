@@ -13,11 +13,17 @@ class PGRCOMBAT_API UNanamiAnimInstance : public UAnimInstance
 public:
     // 装备动画蓝图从当前角色绑定形态源。
     void NativeInitializeAnimation() override;
-    // 在游戏线程采样形态，由动画图选择相应待机。
+    // 在游戏线程采样移动和形态，由动画图选择基础姿态。
     void NativeUpdateAnimation(float DeltaSeconds) override;
 
     UPROPERTY(BlueprintReadOnly, Transient, Category = "Form")
     bool bShieldAxe = false;
+
+    UPROPERTY(BlueprintReadOnly, Transient, Category = "Movement", meta = (Units = "cm/s"))
+    float GroundSpeed = 0.0f;
+
+    UPROPERTY(BlueprintReadOnly, Transient, Category = "Movement", meta = (Units = "Degrees"))
+    float MoveDirection = 0.0f;
 
 protected:
     // 在当帧 Section 确定后、动画图求值前，从上帧实际显示的姿势接入黄球收势。

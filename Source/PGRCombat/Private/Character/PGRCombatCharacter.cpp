@@ -9,6 +9,7 @@
 #include "Engine/LocalPlayer.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "InputAction.h"
@@ -46,6 +47,15 @@ void APGRCombatCharacter::PostInitializeComponents()
     }
     Motion->ActionSet = ActionSet;
     SetAnimRootMotionTranslationScale(FighterRootMotionTranslationScale);
+
+    if (MoveAction)
+    {
+        bUseControllerRotationYaw = false;
+        UCharacterMovementComponent* Movement = GetCharacterMovement();
+        Movement->bUseControllerDesiredRotation = false;
+        Movement->bOrientRotationToMovement = true;
+        Combat->OnActionChanged.AddUniqueDynamic(this, &ThisClass::OnCombatActionChanged);
+    }
 }
 
 // 切换控制器或重新接管角色时，重新安装当前本地玩家的战斗输入映射。
@@ -67,6 +77,10 @@ void APGRCombatCharacter::PawnClientRestart()
 // 从注册时的本地玩家移除战斗映射，并清除缓存的输入子系统。
 void APGRCombatCharacter::RemoveCombatMapping()
 {
+    if (MoveAction)
+    {
+        ConsumeMovementInputVector();
+    }
     if (Combat)
     {
         Combat->ClearBufferedInput();
@@ -104,11 +118,15 @@ void APGRCombatCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
     Super::EndPlay(EndPlayReason);
 }
 
-// 绑定战斗指令，黄球单独接收按下、松开和取消。
+// 绑定持续移动与战斗指令，黄球单独接收按下、松开和取消。
 void APGRCombatCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
     Super::SetupPlayerInputComponent(PlayerInputComponent);
     auto* Input = Cast<UEnhancedInputComponent>(PlayerInputComponent);
+    if (Input && MoveAction)
+    {
+        Input->BindAction(MoveAction, ETriggerEvent::Triggered, this, &ThisClass::OnMove);
+    }
     if (Input && BasicAttackAction)
     {
         Input->BindAction(BasicAttackAction, ETriggerEvent::Started, this, &ThisClass::OnBasicAttackPressed);
@@ -132,6 +150,41 @@ void APGRCombatCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInput
             Input->BindAction(YellowOrbAction, ETriggerEvent::Canceled, Form, &UNanamiFormComponent::CancelYellow);
         }
     }
+}
+
+// 每帧只提交本地玩家仍在按的方向，斜向输入保持与单轴相同的最大幅度。
+void APGRCombatCharacter::OnMove(const FInputActionValue& Value)
+{
+    if (Combat->GetActiveInstanceId() != 0)
+    {
+        return;
+    }
+
+    const FVector2D Axis = Value.Get<FVector2D>().GetClampedToMaxSize(1.0);
+    const FRotator ViewYaw(0.0, GetControlRotation().Yaw, 0.0);
+    AddMovementInput(ViewYaw.RotateVector(FVector(Axis.Y, Axis.X, 0.0)));
+}
+
+// 仅在常态移动交给动作时清一次本帧输入和水平惯性，连段保留原有根运动衔接。
+void APGRCombatCharacter::OnCombatActionChanged(FName, int64, ECombatActionEvent)
+{
+    UCharacterMovementComponent* Movement = GetCharacterMovement();
+    const bool bActionActive = Combat->GetActiveInstanceId() != 0;
+    if (bActionActive && Movement->bOrientRotationToMovement)
+    {
+        // 同帧方向键可能先于动作键触发，丢掉已经提交但尚未消费的输入。
+        ConsumeMovementInputVector();
+        if (Movement->IsMovingOnGround())
+        {
+            Movement->StopMovementImmediately();
+        }
+        else
+        {
+            Movement->Velocity.X = 0.0;
+            Movement->Velocity.Y = 0.0;
+        }
+    }
+    Movement->bOrientRotationToMovement = !bActionActive;
 }
 
 // 向战斗组件提交一次普攻按下指令。

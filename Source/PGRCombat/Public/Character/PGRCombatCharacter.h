@@ -9,6 +9,8 @@ class UCombatMotionComponent;
 class UInputAction;
 class UInputMappingContext;
 class UEnhancedInputLocalPlayerSubsystem;
+enum class ECombatActionEvent : uint8;
+struct FInputActionValue;
 
 UCLASS()
 class PGRCOMBAT_API APGRCombatCharacter : public ACharacter
@@ -28,7 +30,7 @@ public:
 protected:
     // 在组件就绪后应用角色的表现配置。
     void PostInitializeComponents() override;
-    // 将普攻和红、蓝球的按键事件连接到战斗逻辑。
+    // 在同一个输入组件上绑定基础移动和战斗指令。
     void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
     // 角色离开世界时收回战斗输入。
     void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
@@ -36,6 +38,11 @@ protected:
 private:
     // 撤销本角色先前注册的战斗输入映射。
     void RemoveCombatMapping();
+    // 将本帧二维输入转换为训练镜头朝向下的移动意图。
+    void OnMove(const FInputActionValue& Value);
+    // 让成功起播的动作接管移动和朝向，动作结算后恢复移动转向。
+    UFUNCTION()
+    void OnCombatActionChanged(FName ActionId, int64 InstanceId, ECombatActionEvent Event);
     // 处理普攻按键起手。
     void OnBasicAttackPressed();
     // 处理已经触发的普攻输入结束。
@@ -55,6 +62,9 @@ private:
 
     UPROPERTY(EditDefaultsOnly, Category = "Combat|Input")
     TObjectPtr<UInputMappingContext> CombatMapping;
+
+    UPROPERTY(EditDefaultsOnly, Category = "Movement|Input")
+    TObjectPtr<UInputAction> MoveAction;
 
     UPROPERTY(EditDefaultsOnly, Category = "Combat|Input")
     TObjectPtr<UInputAction> BasicAttackAction;

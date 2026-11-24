@@ -1,8 +1,10 @@
 #include "Motion/NanamiAnimInstance.h"
 
 #include "Animation/AnimMontage.h"
+#include "Combat/CombatComponent.h"
 #include "Combat/NanamiFormComponent.h"
-#include "GameFramework/Actor.h"
+#include "GameFramework/Character.h"
+#include "GameFramework/CharacterMovementComponent.h"
 
 // 动画实例重建时重新查找所属角色的形态组件。
 void UNanamiAnimInstance::NativeInitializeAnimation()
@@ -14,10 +16,23 @@ void UNanamiAnimInstance::NativeInitializeAnimation()
     LastHoldSection = NAME_None;
 }
 
-// 保持形态读取在游戏线程，供并行动画图使用该帧的只读姿态选择值。
+// 将平面速度、相对移动角和形态写入该帧的并行动画图输入。
 void UNanamiAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 {
     Super::NativeUpdateAnimation(DeltaSeconds);
+    const ACharacter* Character = Cast<ACharacter>(GetOwningActor());
+    const FVector Velocity = Character ? Character->GetVelocity() : FVector::ZeroVector;
+    const float Speed = Velocity.Size2D();
+    const UCombatComponent* Combat = Character ? Character->FindComponentByClass<UCombatComponent>() : nullptr;
+    const UCharacterMovementComponent* Movement = Character ? Character->GetCharacterMovement() : nullptr;
+    const bool bIsLocomoting = Movement && Movement->IsMovingOnGround() && Speed > 5.0f
+        && (!Combat || Combat->GetActiveInstanceId() == 0);
+    GroundSpeed = bIsLocomoting ? Speed : 0.0f;
+    MoveDirection = bIsLocomoting
+        ? FMath::RadiansToDegrees(FMath::Atan2(FVector::DotProduct(Velocity, Character->GetActorRightVector()),
+                                              FVector::DotProduct(Velocity, Character->GetActorForwardVector())))
+        : 0.0f;
+
     if (!Form.IsValid())
     {
         // 蓝图创建的组件可能晚于原生 Mesh 注册，首个有效角色帧再绑定。
