@@ -1,6 +1,7 @@
 #include "Motion/NanamiAnimInstance.h"
 
 #include "Animation/AnimMontage.h"
+#include "Animation/AnimSequence.h"
 #include "Combat/CombatComponent.h"
 #include "Combat/NanamiFormComponent.h"
 #include "GameFramework/Character.h"
@@ -12,6 +13,10 @@ void UNanamiAnimInstance::NativeInitializeAnimation()
     Super::NativeInitializeAnimation();
     AActor* Owner = GetOwningActor();
     Form = Owner ? Owner->FindComponentByClass<UNanamiFormComponent>() : nullptr;
+    bPlayingRunStop = false;
+    ActiveRunStop = nullptr;
+    RunStopTime = 0.0f;
+    LastDrivenGroundSpeed = 0.0f;
     LastHoldInstanceId = 0;
     LastHoldSection = NAME_None;
 }
@@ -25,8 +30,9 @@ void UNanamiAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
     const float Speed = Velocity.Size2D();
     const UCombatComponent* Combat = Character ? Character->FindComponentByClass<UCombatComponent>() : nullptr;
     const UCharacterMovementComponent* Movement = Character ? Character->GetCharacterMovement() : nullptr;
-    const bool bIsLocomoting = Movement && Movement->IsMovingOnGround() && Speed > 5.0f
+    const bool bCanLocomote = Movement && Movement->IsMovingOnGround()
         && (!Combat || Combat->GetActiveInstanceId() == 0);
+    const bool bIsLocomoting = bCanLocomote && Speed > 5.0f;
     GroundSpeed = bIsLocomoting ? Speed : 0.0f;
     MoveDirection = bIsLocomoting
         ? FMath::RadiansToDegrees(FMath::Atan2(FVector::DotProduct(Velocity, Character->GetActorRightVector()),
@@ -45,15 +51,41 @@ void UNanamiAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
     if (Form.IsValid() && Form->GetYellowHoldInstanceId() != 0)
     {
         bShieldAxe = false;
-        return;
+    }
+    else
+    {
+        // 普通切形刚混入时仍看得到旧待机，等动作盖住它再换成目标待机。
+        const FAnimMontageInstance* Instance = GetActiveMontageInstance();
+        if (!Instance || Instance->GetDesiredWeight() <= Instance->GetWeight() + KINDA_SMALL_NUMBER)
+        {
+            bShieldAxe = Form.IsValid() && Form->GetWeaponForm() == ENanamiWeaponForm::ShieldAxe;
+        }
     }
 
-    // 普通切形刚混入时仍看得到旧待机，等动作盖住它再换成目标待机。
-    const FAnimMontageInstance* Instance = GetActiveMontageInstance();
-    if (!Instance || Instance->GetDesiredWeight() <= Instance->GetWeight() + KINDA_SMALL_NUMBER)
+    const bool bHasMovementInput = bCanLocomote && !Movement->GetCurrentAcceleration().IsNearlyZero();
+    UpdateRunStop(DeltaSeconds, bCanLocomote, bHasMovementInput);
+}
+
+// 用片段自身的时长采样停步，混出期间保留最后的采样位置。
+void UNanamiAnimInstance::UpdateRunStop(float DeltaSeconds, bool bCanLocomote, bool bHasMovementInput)
+{
+    if (!bCanLocomote || bHasMovementInput)
     {
-        bShieldAxe = Form.IsValid() && Form->GetWeaponForm() == ENanamiWeaponForm::ShieldAxe;
+        bPlayingRunStop = false;
     }
+    else if (LastDrivenGroundSpeed >= RunStopMinSpeed)
+    {
+        ActiveRunStop = bShieldAxe ? AxeRunStop.Get() : SwordRunStop.Get();
+        RunStopTime = 0.0f;
+        bPlayingRunStop = ActiveRunStop && ActiveRunStop->RateScale > 0.0f && ActiveRunStop->GetPlayLength() > 0.0f;
+    }
+    else if (bPlayingRunStop)
+    {
+        const float PlayLength = ActiveRunStop->GetPlayLength();
+        RunStopTime = FMath::Min(RunStopTime + DeltaSeconds * ActiveRunStop->RateScale, PlayLength);
+        bPlayingRunStop = RunStopTime < PlayLength - UE_KINDA_SMALL_NUMBER;
+    }
+    LastDrivenGroundSpeed = bHasMovementInput ? GroundSpeed : 0.0f;
 }
 
 // 收势从任意攻击帧接入；保持 Montage 时间和胶囊根运动，仅衰减骨架姿势的突变。
