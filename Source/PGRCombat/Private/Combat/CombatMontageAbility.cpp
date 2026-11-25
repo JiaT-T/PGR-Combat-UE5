@@ -26,6 +26,7 @@ bool UCombatMontageAbility::ResolveTasks(FCombatMontageTasks& OutTasks) const
 {
     const UCombatInputBufferTask* Buffer = nullptr;
     const UCombatChainWindowTask* Chain = nullptr;
+    const UCombatMoveCancelWindowTask* MoveCancel = nullptr;
     const UCombatBasicFollowUpTask* Basic = nullptr;
     FCombatMontageTasks Resolved;
     Resolved.bRequireFullPlayback = bRequireFullPlayback;
@@ -57,6 +58,14 @@ bool UCombatMontageAbility::ResolveTasks(FCombatMontageTasks& OutTasks) const
                 return false;
             }
             Chain = Window;
+        }
+        else if (const auto* MovementWindow = Cast<UCombatMoveCancelWindowTask>(Task))
+        {
+            if (MoveCancel)
+            {
+                return false;
+            }
+            MoveCancel = MovementWindow;
         }
         else if (const auto* FollowUp = Cast<UCombatBasicFollowUpTask>(Task))
         {
@@ -90,7 +99,8 @@ bool UCombatMontageAbility::ResolveTasks(FCombatMontageTasks& OutTasks) const
         return false;
     }
     if (!ReadWindow(Buffer, Resolved.StartPosition, EndPosition, Resolved.InputBuffer)
-        || !ReadWindow(Chain, Resolved.StartPosition, EndPosition, Resolved.ChainWindow))
+        || !ReadWindow(Chain, Resolved.StartPosition, EndPosition, Resolved.ChainWindow)
+        || !ReadWindow(MoveCancel, Resolved.StartPosition, EndPosition, Resolved.MoveCancelWindow))
     {
         return false;
     }
@@ -98,6 +108,11 @@ bool UCombatMontageAbility::ResolveTasks(FCombatMontageTasks& OutTasks) const
     if (!Chain)
     {
         Resolved.ChainWindow = Resolved.InputBuffer;
+    }
+    // 普通动作沿用实际切招窗口，受完整播放保护的动作依赖单独配置。
+    if (!MoveCancel && !bRequireFullPlayback)
+    {
+        Resolved.MoveCancelWindow = Resolved.ChainWindow;
     }
     if (Basic)
     {

@@ -28,6 +28,8 @@ public:
     bool PlayAction(FName ActionId, ECombatCommand Command, FOnMontageEnded OnEnded);
     // 查询本次按下应当被忽略、暂存，还是立即切到下一段。
     ECombatChainWindow GetChainWindow() const;
+    // 当前实例的播放进度是否已进入移动取消窗口。
+    bool IsMoveCancelWindowOpen() const;
     // 查询当前实例是否配置了专门接普攻的收势窗口，结束回调中仍可读取。
     bool HasBasicFollowUp() const { return BasicFollowUpChain.StartSeconds < BasicFollowUpChain.EndSeconds; }
     // 读取普攻专用窗口，其他指令沿用各自的衔接规则。
@@ -61,6 +63,7 @@ private:
     FName ExitSection = NAME_None;
     FCombatAbilityWindow InputBuffer;
     FCombatAbilityWindow ChainWindow;
+    FCombatAbilityWindow MoveCancelWindow;
     FCombatAbilityWindow BasicFollowUpBuffer;
     FCombatAbilityWindow BasicFollowUpChain;
     bool bBlendingOutNaturally = false;

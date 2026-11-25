@@ -21,7 +21,7 @@ public:
     // 取消挂在当前实例上的提前输入，角色失去控制时也要清理。
     void ClearBufferedInput();
 
-    // 当前实例锁定普通打断与移动，只有显式配置的轻击衔接可以接管。
+    // 当前实例锁定普通打断与移动，专用窗口由对应入口检查。
     UFUNCTION(BlueprintPure, Category = "Combat")
     bool IsActionLocked() const;
 
@@ -36,6 +36,9 @@ public:
     // 主动停止并结算当前动作。
     UFUNCTION(BlueprintCallable, Category = "Combat")
     void InterruptActiveAction();
+
+    // 允许窗口内的方向输入打断当前动作，并确认控制权可以交还移动。
+    bool TryCancelForMovement();
 
     // 返回正在播放的动作标识，空闲时返回空标识。
     UFUNCTION(BlueprintPure, Category = "Combat")
@@ -74,6 +77,8 @@ private:
     // 再次确认当前实例储存的出招意图仍有效，然后尝试切招一次。
     bool ConsumeBufferedInput(ECombatActionEvent PreviousEvent);
 
+    // 停止已经获准打断的活动实例，统一处理缓存和结束事件。
+    void StopActiveAction();
     // 接收指定动作实例的动画结束通知。
     void OnMontageEnded(UAnimMontage* Montage, bool bInterrupted, int64 InstanceId);
     // 结束给定实例并广播本次结算结果。

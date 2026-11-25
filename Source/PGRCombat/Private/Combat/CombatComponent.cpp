@@ -310,15 +310,34 @@ void UCombatComponent::ClearBufferedInput()
     SetComponentTickEnabled(false);
 }
 
-// 停止当前动画，并用其原实例编号结算打断。
+// 普通打断遵守完整播放保护，组件退出时仍可停止当前动作。
 void UCombatComponent::InterruptActiveAction()
 {
-    const int64 InstanceId = ActiveInstanceId;
-    if (InstanceId != 0 && (bEndingPlay || !IsActionLocked()))
+    if (ActiveInstanceId != 0 && (bEndingPlay || !IsActionLocked()))
     {
-        Motion->StopAction();
-        FinishAction(InstanceId, ECombatActionEvent::Interrupted);
+        StopActiveAction();
     }
+}
+
+// 已缓存的出招和在当前窗口受理的轻击优先，方向键只在允许的时段接管。
+bool UCombatComponent::TryCancelForMovement()
+{
+    const bool bPendingTap = TapWindowInstanceId == ActiveInstanceId && !TapActionAtPress.IsNone();
+    if (bEndingPlay || ActiveInstanceId == 0 || !Motion || !BufferedActionId.IsNone()
+        || bPendingTap || !Motion->IsMoveCancelWindowOpen())
+    {
+        return false;
+    }
+    StopActiveAction();
+    return ActiveInstanceId == 0;
+}
+
+// 保留被打断的实例号，延迟到达的动画结束回调会由结算逻辑去重。
+void UCombatComponent::StopActiveAction()
+{
+    const int64 InstanceId = ActiveInstanceId;
+    Motion->StopAction();
+    FinishAction(InstanceId, ECombatActionEvent::Interrupted);
 }
 
 // 将蒙太奇的结束回调转成对应实例的自然收招或打断事件。

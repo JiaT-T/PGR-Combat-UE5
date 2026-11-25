@@ -99,6 +99,7 @@ bool UCombatMotionComponent::PlayAction(FName ActionId, ECombatCommand Command, 
     bRequireFullPlayback = Tasks.bRequireFullPlayback;
     InputBuffer = Tasks.InputBuffer;
     ChainWindow = Tasks.ChainWindow;
+    MoveCancelWindow = Tasks.MoveCancelWindow;
     BasicFollowUpBuffer = Tasks.BasicFollowUpBuffer;
     BasicFollowUpChain = Tasks.BasicFollowUpChain;
     if (PreviousAnimInstance)
@@ -116,6 +117,13 @@ bool UCombatMotionComponent::PlayAction(FName ActionId, ECombatCommand Command, 
 ECombatChainWindow UCombatMotionComponent::GetChainWindow() const
 {
     return ReadChainWindow(GetPlayingInstance(), InputBuffer, ChainWindow);
+}
+
+// 移动取消可以发生在自然淡出，仍按同一个 Montage 实例的游标判断。
+bool UCombatMotionComponent::IsMoveCancelWindowOpen() const
+{
+    const FAnimMontageInstance* Instance = GetPlayingInstance(true);
+    return Instance && MoveCancelWindow.Contains(Instance->GetPosition());
 }
 
 // 允许普攻专用窗口延伸至本次 Montage 的自然淡出。
@@ -180,15 +188,15 @@ bool UCombatMotionComponent::JumpForwardToActionSection(FName Section)
 // 按实例编号停止组件先前启动的蒙太奇并清除跟踪记录。
 void UCombatMotionComponent::StopAction()
 {
-    UAnimInstance* AnimInstance = PlayingAnimInstance.Get();
-    FAnimMontageInstance* Instance = AnimInstance ? AnimInstance->GetMontageInstanceForID(MontageInstanceId) : nullptr;
+    FAnimMontageInstance* Instance = GetPlayingInstance(true);
     MontageInstanceId = INDEX_NONE;
     ExitSection = NAME_None;
+    MoveCancelWindow = {};
     BasicFollowUpBuffer = {};
     BasicFollowUpChain = {};
     bBlendingOutNaturally = false;
     PlayingAnimInstance.Reset();
-    if (Instance && Instance->IsActive())
+    if (Instance)
     {
         Instance->Stop(FAlphaBlend(0.0f));
     }

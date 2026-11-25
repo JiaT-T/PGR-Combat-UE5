@@ -60,6 +60,13 @@ class PGRCOMBAT_API UCombatChainWindowTask : public UCombatWindowTask
     GENERATED_BODY()
 };
 
+// 为本招单独指定允许交还移动控制的时间。
+UCLASS(meta = (DisplayName = "Movement Cancel Window"))
+class PGRCOMBAT_API UCombatMoveCancelWindowTask : public UCombatWindowTask
+{
+    GENERATED_BODY()
+};
+
 // 允许从本招的收势接普攻。三个时间点均从完整 Montage 起点算起。
 UCLASS(meta = (DisplayName = "Basic Attack Follow-up"))
 class PGRCOMBAT_API UCombatBasicFollowUpTask : public UCombatAbilityTask
@@ -102,6 +109,7 @@ struct FCombatMontageTasks
     bool bRequireFullPlayback = false;
     FCombatAbilityWindow InputBuffer;
     FCombatAbilityWindow ChainWindow;
+    FCombatAbilityWindow MoveCancelWindow;
     FCombatAbilityWindow BasicFollowUpBuffer;
     FCombatAbilityWindow BasicFollowUpChain;
 };
@@ -116,7 +124,7 @@ public:
     UPROPERTY(EditDefaultsOnly, Category = "Ability")
     ECombatCommand Command = ECombatCommand::BasicAttack;
 
-    // 锁住普通输入和移动直至动作结束。配置了普攻衔接 Task 时，仅在其窗口内放行普攻。
+    // 完整播放保护普通输入和移动，单独配置的普攻衔接及移动窗口仍可按各自时间接管。
     UPROPERTY(EditDefaultsOnly, Category = "Ability")
     bool bRequireFullPlayback = false;
 
