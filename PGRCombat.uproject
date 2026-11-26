@@ -1,33 +1,44 @@
 {
-    "FileVersion": 3,
-    "EngineAssociation": "5.8",
-    "Category": "Games",
-    "Description": "Independent combat prototyping project",
-    "Modules": [
-        {
-            "Name": "PGRCombat",
-            "Type": "Runtime",
-            "LoadingPhase": "Default"
-        }
-    ],
-    "Plugins": [
-        {
-            "Name": "EnhancedInput",
-            "Enabled": true
-        },
-        {
-            "Name": "Puerts",
-            "Enabled": true
-        },
-        {
-            "Name": "ModelContextProtocol",
-            "Enabled": true,
-            "TargetAllowList": [ "Editor" ]
-        },
-        {
-            "Name": "EditorToolset",
-            "Enabled": true,
-            "TargetAllowList": [ "Editor" ]
-        }
-    ]
+  "FileVersion": 3,
+  "EngineAssociation": "5.8",
+  "Category": "Games",
+  "Description": "Independent combat prototyping project",
+  "Modules": [
+    {
+      "Name": "PGRCombat",
+      "Type": "Runtime",
+      "LoadingPhase": "Default"
+    }
+  ],
+  "Plugins": [
+    {
+      "Name": "EnhancedInput",
+      "Enabled": true
+    },
+    {
+      "Name": "Puerts",
+      "Enabled": true
+    },
+    {
+      "Name": "ModelContextProtocol",
+      "Enabled": false,
+      "TargetAllowList": [
+        "Editor"
+      ]
+    },
+    {
+      "Name": "EditorToolset",
+      "Enabled": false,
+      "TargetAllowList": [
+        "Editor"
+      ]
+    },
+    {
+      "Name": "PythonScriptPlugin",
+      "Enabled": true,
+      "TargetAllowList": [
+        "Editor"
+      ]
+    }
+  ]
 }
