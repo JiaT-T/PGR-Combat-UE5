@@ -18,6 +18,9 @@ export interface CombatComponent {
 // 按输入指令分派七实的动作规则，未知指令返回空动作。
 export function resolveNanamiAction(combat: CombatComponent, command: string, phase: string): string {
     const form = combat.GetOwner().GetComponentByClass<NanamiForm>(NanamiFormComponent.StaticClass());
+    if (command === "Ultimate" && phase === "Pressed" && form) {
+        return form.GetWeaponForm() === ENanamiWeaponForm.ShieldAxe ? "Attack52" : "Attack51";
+    }
     if (command === "BasicAttack" || command === "YellowOrb") {
         if (command === "YellowOrb") {
             return form ? resolveYellowOrb(form, phase) : "";

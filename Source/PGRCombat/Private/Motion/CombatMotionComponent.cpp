@@ -102,6 +102,8 @@ bool UCombatMotionComponent::PlayAction(FName ActionId, ECombatCommand Command, 
     MoveCancelWindow = Tasks.MoveCancelWindow;
     BasicFollowUpBuffer = Tasks.BasicFollowUpBuffer;
     BasicFollowUpChain = Tasks.BasicFollowUpChain;
+    UltimateBuffer = Tasks.UltimateBuffer;
+    UltimateChain = Tasks.UltimateChain;
     if (PreviousAnimInstance)
     {
         FAnimMontageInstance* Previous = PreviousAnimInstance->GetMontageInstanceForID(PreviousInstanceId);
@@ -130,6 +132,19 @@ bool UCombatMotionComponent::IsMoveCancelWindowOpen() const
 ECombatChainWindow UCombatMotionComponent::GetBasicFollowUpWindow() const
 {
     return ReadChainWindow(GetPlayingInstance(true), BasicFollowUpBuffer, BasicFollowUpChain);
+}
+
+// 按本次 Montage 的实际游标判断必杀窗口，也支持跳入焚冲收势段。
+ECombatChainWindow UCombatMotionComponent::GetUltimateWindow() const
+{
+    return ReadChainWindow(GetPlayingInstance(true), UltimateBuffer, UltimateChain);
+}
+
+// 允许已缓存的按键在两次更新之间跨过开窗点。
+bool UCombatMotionComponent::HasReachedUltimateWindow() const
+{
+    const FAnimMontageInstance* Instance = GetPlayingInstance(true);
+    return HasUltimateWindow() && Instance && Instance->GetPosition() >= UltimateChain.StartSeconds;
 }
 
 // 已接受的普攻输入在跨帧经过切招点时仍然有效。
@@ -194,6 +209,8 @@ void UCombatMotionComponent::StopAction()
     MoveCancelWindow = {};
     BasicFollowUpBuffer = {};
     BasicFollowUpChain = {};
+    UltimateBuffer = {};
+    UltimateChain = {};
     bBlendingOutNaturally = false;
     PlayingAnimInstance.Reset();
     if (Instance)

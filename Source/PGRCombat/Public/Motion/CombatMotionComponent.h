@@ -36,6 +36,12 @@ public:
     ECombatChainWindow GetBasicFollowUpWindow() const;
     // 判断已缓存的普攻是否到达可混入下一招的起点。
     bool HasReachedBasicFollowUpWindow() const;
+    // 有此配置的动作只在自己的必杀窗口允许被替换。
+    bool HasUltimateWindow() const { return UltimateChain.StartSeconds < UltimateChain.EndSeconds; }
+    // 查询本帧按必杀应拒绝、缓存还是立即接管。
+    ECombatChainWindow GetUltimateWindow() const;
+    // 判断已接收的必杀输入是否经过开窗点。
+    bool HasReachedUltimateWindow() const;
     // 兼容已有的立即续段查询，提前输入区间不视作已经开窗。
     bool IsInputBufferOpen() const { return GetChainWindow() == ECombatChainWindow::Chain; }
     // 判断一次已缓存的输入是否随动画越过了允许切招的起点。
@@ -66,6 +72,8 @@ private:
     FCombatAbilityWindow MoveCancelWindow;
     FCombatAbilityWindow BasicFollowUpBuffer;
     FCombatAbilityWindow BasicFollowUpChain;
+    FCombatAbilityWindow UltimateBuffer;
+    FCombatAbilityWindow UltimateChain;
     bool bBlendingOutNaturally = false;
     bool bRequireFullPlayback = false;
 };

@@ -45,6 +45,8 @@ private:
     void OnCombatActionChanged(FName ActionId, int64 InstanceId, ECombatActionEvent Event);
     // 处理普攻按键起手。
     void OnBasicAttackPressed();
+    // 点按必杀时只提交一次，由七实规则按当前武器选招。
+    void OnUltimatePressed();
     // 处理已经触发的普攻输入结束。
     void OnBasicAttackReleased();
     // 处理触发条件尚未满足就结束的普攻输入。
@@ -77,6 +79,9 @@ private:
 
     UPROPERTY(EditDefaultsOnly, Category = "Combat|Input")
     TObjectPtr<UInputAction> YellowOrbAction;
+
+    UPROPERTY(EditDefaultsOnly, Category = "Combat|Input")
+    TObjectPtr<UInputAction> UltimateAction;
 
     UPROPERTY(EditDefaultsOnly, Category = "Combat|Presentation")
     TObjectPtr<USkeletalMesh> FighterMesh;

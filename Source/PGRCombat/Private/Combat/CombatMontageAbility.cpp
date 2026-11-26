@@ -28,6 +28,7 @@ bool UCombatMontageAbility::ResolveTasks(FCombatMontageTasks& OutTasks) const
     const UCombatChainWindowTask* Chain = nullptr;
     const UCombatMoveCancelWindowTask* MoveCancel = nullptr;
     const UCombatBasicFollowUpTask* Basic = nullptr;
+    const UCombatUltimateWindowTask* Ultimate = nullptr;
     FCombatMontageTasks Resolved;
     Resolved.bRequireFullPlayback = bRequireFullPlayback;
     for (const UCombatAbilityTask* Task : Tasks)
@@ -74,6 +75,14 @@ bool UCombatMontageAbility::ResolveTasks(FCombatMontageTasks& OutTasks) const
                 return false;
             }
             Basic = FollowUp;
+        }
+        else if (const auto* InterruptWindow = Cast<UCombatUltimateWindowTask>(Task))
+        {
+            if (Ultimate)
+            {
+                return false;
+            }
+            Ultimate = InterruptWindow;
         }
         else
         {
@@ -124,6 +133,30 @@ bool UCombatMontageAbility::ResolveTasks(FCombatMontageTasks& OutTasks) const
         }
         Resolved.BasicFollowUpBuffer = { Basic->BufferStartSeconds, Basic->ChainStartSeconds };
         Resolved.BasicFollowUpChain = { Basic->ChainStartSeconds, Basic->EndSeconds };
+    }
+    if (Ultimate)
+    {
+        float Origin = 0.f;
+        float Limit = EndPosition;
+        if (!Ultimate->RelativeToSection.IsNone())
+        {
+            const int32 Index = Resolved.Montage->GetSectionIndex(Ultimate->RelativeToSection);
+            if (Index == INDEX_NONE)
+            {
+                return false;
+            }
+            Resolved.Montage->GetSectionStartAndEndTime(Index, Origin, Limit);
+        }
+        FCombatAbilityWindow LocalWindow;
+        if (!FMath::IsFinite(Ultimate->BufferLeadSeconds) || Ultimate->BufferLeadSeconds < 0.f
+            || !ReadWindow(Ultimate, FMath::Max(0.f, Resolved.StartPosition - Origin),
+                           FMath::Min(Limit, EndPosition) - Origin, LocalWindow))
+        {
+            return false;
+        }
+        const float Start = Origin + LocalWindow.StartSeconds;
+        Resolved.UltimateChain = { Start, Origin + LocalWindow.EndSeconds };
+        Resolved.UltimateBuffer = { FMath::Max(FMath::Max(Origin, Resolved.StartPosition), Start - Ultimate->BufferLeadSeconds), Start };
     }
     OutTasks = Resolved;
     return true;
