@@ -123,10 +123,6 @@ void APGRCombatCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInput
 {
     Super::SetupPlayerInputComponent(PlayerInputComponent);
     auto* Input = Cast<UEnhancedInputComponent>(PlayerInputComponent);
-    if (Input && MoveAction)
-    {
-        Input->BindAction(MoveAction, ETriggerEvent::Triggered, this, &ThisClass::OnMove);
-    }
     if (Input && BasicAttackAction)
     {
         Input->BindAction(BasicAttackAction, ETriggerEvent::Started, this, &ThisClass::OnBasicAttackPressed);
@@ -141,6 +137,10 @@ void APGRCombatCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInput
     {
         Input->BindAction(RedOrbAction, ETriggerEvent::Started, this, &ThisClass::OnRedOrbPressed);
     }
+    if (Input && UltimateAction)
+    {
+        Input->BindAction(UltimateAction, ETriggerEvent::Started, this, &ThisClass::OnUltimatePressed);
+    }
     if (Input && YellowOrbAction)
     {
         if (UNanamiFormComponent* Form = FindComponentByClass<UNanamiFormComponent>())
@@ -150,17 +150,23 @@ void APGRCombatCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInput
             Input->BindAction(YellowOrbAction, ETriggerEvent::Canceled, Form, &UNanamiFormComponent::CancelYellow);
         }
     }
+    // 同帧的出招与松键确认先于持续方向输入处理。
+    if (Input && MoveAction)
+    {
+        Input->BindAction(MoveAction, ETriggerEvent::Triggered, this, &ThisClass::OnMove);
+    }
 }
 
 // 每帧只提交本地玩家仍在按的方向，斜向输入保持与单轴相同的最大幅度。
 void APGRCombatCharacter::OnMove(const FInputActionValue& Value)
 {
-    if (Combat->GetActiveInstanceId() != 0)
+    const FVector2D Axis = Value.Get<FVector2D>().GetClampedToMaxSize(1.0);
+    if (Axis.IsNearlyZero() || Super::IsMoveInputIgnored()
+        || (Combat->GetActiveInstanceId() != 0 && !Combat->TryCancelForMovement()))
     {
         return;
     }
 
-    const FVector2D Axis = Value.Get<FVector2D>().GetClampedToMaxSize(1.0);
     const FRotator ViewYaw(0.0, GetControlRotation().Yaw, 0.0);
     AddMovementInput(ViewYaw.RotateVector(FVector(Axis.Y, Axis.X, 0.0)));
 }
@@ -185,6 +191,12 @@ void APGRCombatCharacter::OnCombatActionChanged(FName, int64, ECombatActionEvent
         }
     }
     Movement->bOrientRotationToMovement = !bActionActive;
+}
+
+// 按下必杀键时沿用统一的动作启动、打断与衔接入口。
+void APGRCombatCharacter::OnUltimatePressed()
+{
+    Combat->SubmitInput(ECombatCommand::Ultimate, ECombatInputPhase::Pressed);
 }
 
 // 向战斗组件提交一次普攻按下指令。

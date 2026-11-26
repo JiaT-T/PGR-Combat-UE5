@@ -69,7 +69,7 @@ protected:
     void BeginPlay() override;
     // 清理输入计时和对本角色的订阅。
     void EndPlay(const EEndPlayReason::Type Reason) override;
-    // 仅攻击期间扣除游戏时间对应的星芒。
+    // 推进焚冲耗星和盾斧必杀的收势回切。
     void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* TickFunction) override;
 
 private:
@@ -102,5 +102,7 @@ private:
     bool bYellowPressed = false;
     bool bHoldThresholdReached = false;
     int64 HoldInstanceId = 0;
+    // 只允许发动盾斧必杀的那个实例在收势时归还剑盾形态。
+    int64 UltimateReturnInstanceId = 0;
     FTimerHandle HoldTimer;
 };
