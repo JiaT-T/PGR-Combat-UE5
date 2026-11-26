@@ -58,6 +58,23 @@ UCLASS(meta = (DisplayName = "Chain Window"))
 class PGRCOMBAT_API UCombatChainWindowTask : public UCombatWindowTask
 {
     GENERATED_BODY()
+
+public:
+    // 允许在本次 Montage 自然淡出时继续按配置的时间窗接招。
+    UPROPERTY(EditAnywhere, Category = "Task")
+    bool bAllowDuringNaturalBlendOut = false;
+};
+
+// 为再次短按黄球指定独立的窗口，起止位置取当前 Montage 的播放时间。
+UCLASS(meta = (DisplayName = "Yellow Orb Tap Follow-up"))
+class PGRCOMBAT_API UCombatYellowTapWindowTask : public UCombatWindowTask
+{
+    GENERATED_BODY()
+
+public:
+    // 在开窗前的这段时间里，可以缓存一次已经松手的短按。
+    UPROPERTY(EditAnywhere, Category = "Task", meta = (ClampMin = "0", Units = "s"))
+    float BufferLeadSeconds = 0.f;
 };
 
 // 为本招单独指定允许交还移动控制的时间。
@@ -129,10 +146,13 @@ struct FCombatMontageTasks
     bool bRequireFullPlayback = false;
     FCombatAbilityWindow InputBuffer;
     FCombatAbilityWindow ChainWindow;
+    bool bAllowChainDuringNaturalBlendOut = false;
     FCombatAbilityWindow MoveCancelWindow;
     float MoveBlendOutSeconds = 0.f;
     FCombatAbilityWindow BasicFollowUpBuffer;
     FCombatAbilityWindow BasicFollowUpChain;
+    FCombatAbilityWindow YellowTapBuffer;
+    FCombatAbilityWindow YellowTapChain;
     FCombatAbilityWindow UltimateBuffer;
     FCombatAbilityWindow UltimateChain;
 };
