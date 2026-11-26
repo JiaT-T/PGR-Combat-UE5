@@ -99,9 +99,15 @@ bool UCombatMotionComponent::PlayAction(FName ActionId, ECombatCommand Command, 
     bRequireFullPlayback = Tasks.bRequireFullPlayback;
     InputBuffer = Tasks.InputBuffer;
     ChainWindow = Tasks.ChainWindow;
+    bAllowChainDuringNaturalBlendOut = Tasks.bAllowChainDuringNaturalBlendOut;
     MoveCancelWindow = Tasks.MoveCancelWindow;
+    MoveBlendOutSeconds = Tasks.MoveBlendOutSeconds;
     BasicFollowUpBuffer = Tasks.BasicFollowUpBuffer;
     BasicFollowUpChain = Tasks.BasicFollowUpChain;
+    YellowTapBuffer = Tasks.YellowTapBuffer;
+    YellowTapChain = Tasks.YellowTapChain;
+    UltimateBuffer = Tasks.UltimateBuffer;
+    UltimateChain = Tasks.UltimateChain;
     if (PreviousAnimInstance)
     {
         FAnimMontageInstance* Previous = PreviousAnimInstance->GetMontageInstanceForID(PreviousInstanceId);
@@ -114,9 +120,13 @@ bool UCombatMotionComponent::PlayAction(FName ActionId, ECombatCommand Command, 
 }
 
 // 先检查直接续段，再接收早按；经过最后一个窗口后的新输入始终被拒绝。
-ECombatChainWindow UCombatMotionComponent::GetChainWindow() const
+ECombatChainWindow UCombatMotionComponent::GetChainWindow(bool bYellowTap) const
 {
-    return ReadChainWindow(GetPlayingInstance(), InputBuffer, ChainWindow);
+    if (UsesYellowTapWindow(bYellowTap))
+    {
+        return ReadChainWindow(GetPlayingInstance(true), YellowTapBuffer, YellowTapChain);
+    }
+    return ReadChainWindow(GetPlayingInstance(bAllowChainDuringNaturalBlendOut), InputBuffer, ChainWindow);
 }
 
 // 移动取消可以发生在自然淡出，仍按同一个 Montage 实例的游标判断。
@@ -132,6 +142,19 @@ ECombatChainWindow UCombatMotionComponent::GetBasicFollowUpWindow() const
     return ReadChainWindow(GetPlayingInstance(true), BasicFollowUpBuffer, BasicFollowUpChain);
 }
 
+// 按本次 Montage 的实际游标判断必杀窗口，也支持跳入焚冲收势段。
+ECombatChainWindow UCombatMotionComponent::GetUltimateWindow() const
+{
+    return ReadChainWindow(GetPlayingInstance(true), UltimateBuffer, UltimateChain);
+}
+
+// 允许已缓存的按键在两次更新之间跨过开窗点。
+bool UCombatMotionComponent::HasReachedUltimateWindow() const
+{
+    const FAnimMontageInstance* Instance = GetPlayingInstance(true);
+    return HasUltimateWindow() && Instance && Instance->GetPosition() >= UltimateChain.StartSeconds;
+}
+
 // 已接受的普攻输入在跨帧经过切招点时仍然有效。
 bool UCombatMotionComponent::HasReachedBasicFollowUpWindow() const
 {
@@ -140,16 +163,18 @@ bool UCombatMotionComponent::HasReachedBasicFollowUpWindow() const
 }
 
 // 缓存只会在切招起点之前建立，跨帧跳过窄窗口时仍能消费已按下的输入。
-bool UCombatMotionComponent::HasReachedChainWindow() const
+bool UCombatMotionComponent::HasReachedChainWindow(bool bYellowTap) const
 {
-    const FAnimMontageInstance* Instance = GetPlayingInstance();
-    return Instance && Instance->GetPosition() >= ChainWindow.StartSeconds;
+    const bool bUseTapWindow = UsesYellowTapWindow(bYellowTap);
+    const FAnimMontageInstance* Instance = GetPlayingInstance(bUseTapWindow || bAllowChainDuringNaturalBlendOut);
+    const FCombatAbilityWindow& Chain = bUseTapWindow ? YellowTapChain : ChainWindow;
+    return Instance && Instance->GetPosition() >= Chain.StartSeconds;
 }
 
 // 仅当本段还会经过衔接窗口时提前排入下一招。
 bool UCombatMotionComponent::IsBeforeChainWindow() const
 {
-    const FAnimMontageInstance* Instance = GetPlayingInstance();
+    const FAnimMontageInstance* Instance = GetPlayingInstance(bAllowChainDuringNaturalBlendOut);
     return Instance && ChainWindow.StartSeconds < ChainWindow.EndSeconds && Instance->GetPosition() < ChainWindow.StartSeconds;
 }
 
@@ -186,18 +211,30 @@ bool UCombatMotionComponent::JumpForwardToActionSection(FName Section)
 }
 
 // 按实例编号停止组件先前启动的蒙太奇并清除跟踪记录。
-void UCombatMotionComponent::StopAction()
+void UCombatMotionComponent::StopAction(float BlendOutSeconds)
 {
     FAnimMontageInstance* Instance = GetPlayingInstance(true);
     MontageInstanceId = INDEX_NONE;
     ExitSection = NAME_None;
     MoveCancelWindow = {};
+    MoveBlendOutSeconds = 0.f;
     BasicFollowUpBuffer = {};
     BasicFollowUpChain = {};
+    YellowTapBuffer = {};
+    YellowTapChain = {};
+    UltimateBuffer = {};
+    UltimateChain = {};
     bBlendingOutNaturally = false;
     PlayingAnimInstance.Reset();
     if (Instance)
     {
-        Instance->Stop(FAlphaBlend(0.0f));
+        if (BlendOutSeconds > 0.f)
+        {
+            // 淡出的旧实例只贡献姿势，胶囊从开窗当帧起由角色移动组件驱动。
+            Instance->PushDisableRootMotion();
+        }
+        FAlphaBlend BlendOut(BlendOutSeconds);
+        BlendOut.SetBlendOption(EAlphaBlendOption::CubicInOut);
+        Instance->Stop(BlendOut);
     }
 }

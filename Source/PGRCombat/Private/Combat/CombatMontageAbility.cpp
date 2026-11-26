@@ -28,6 +28,8 @@ bool UCombatMontageAbility::ResolveTasks(FCombatMontageTasks& OutTasks) const
     const UCombatChainWindowTask* Chain = nullptr;
     const UCombatMoveCancelWindowTask* MoveCancel = nullptr;
     const UCombatBasicFollowUpTask* Basic = nullptr;
+    const UCombatYellowTapWindowTask* YellowTap = nullptr;
+    const UCombatUltimateWindowTask* Ultimate = nullptr;
     FCombatMontageTasks Resolved;
     Resolved.bRequireFullPlayback = bRequireFullPlayback;
     for (const UCombatAbilityTask* Task : Tasks)
@@ -58,14 +60,16 @@ bool UCombatMontageAbility::ResolveTasks(FCombatMontageTasks& OutTasks) const
                 return false;
             }
             Chain = Window;
+            Resolved.bAllowChainDuringNaturalBlendOut = Window->bAllowDuringNaturalBlendOut;
         }
         else if (const auto* MovementWindow = Cast<UCombatMoveCancelWindowTask>(Task))
         {
-            if (MoveCancel)
+            if (MoveCancel || !FMath::IsFinite(MovementWindow->BlendOutSeconds) || MovementWindow->BlendOutSeconds < 0.f)
             {
                 return false;
             }
             MoveCancel = MovementWindow;
+            Resolved.MoveBlendOutSeconds = MoveCancel->BlendOutSeconds;
         }
         else if (const auto* FollowUp = Cast<UCombatBasicFollowUpTask>(Task))
         {
@@ -74,6 +78,22 @@ bool UCombatMontageAbility::ResolveTasks(FCombatMontageTasks& OutTasks) const
                 return false;
             }
             Basic = FollowUp;
+        }
+        else if (const auto* TapWindow = Cast<UCombatYellowTapWindowTask>(Task))
+        {
+            if (YellowTap || !FMath::IsFinite(TapWindow->BufferLeadSeconds) || TapWindow->BufferLeadSeconds < 0.f)
+            {
+                return false;
+            }
+            YellowTap = TapWindow;
+        }
+        else if (const auto* InterruptWindow = Cast<UCombatUltimateWindowTask>(Task))
+        {
+            if (Ultimate)
+            {
+                return false;
+            }
+            Ultimate = InterruptWindow;
         }
         else
         {
@@ -100,6 +120,7 @@ bool UCombatMontageAbility::ResolveTasks(FCombatMontageTasks& OutTasks) const
     }
     if (!ReadWindow(Buffer, Resolved.StartPosition, EndPosition, Resolved.InputBuffer)
         || !ReadWindow(Chain, Resolved.StartPosition, EndPosition, Resolved.ChainWindow)
+        || !ReadWindow(YellowTap, Resolved.StartPosition, EndPosition, Resolved.YellowTapChain)
         || !ReadWindow(MoveCancel, Resolved.StartPosition, EndPosition, Resolved.MoveCancelWindow))
     {
         return false;
@@ -113,6 +134,12 @@ bool UCombatMontageAbility::ResolveTasks(FCombatMontageTasks& OutTasks) const
     if (!MoveCancel && !bRequireFullPlayback)
     {
         Resolved.MoveCancelWindow = Resolved.ChainWindow;
+        Resolved.MoveBlendOutSeconds = GetDefault<UCombatMoveCancelWindowTask>()->BlendOutSeconds;
+    }
+    if (YellowTap)
+    {
+        const float Start = YellowTap->StartSeconds;
+        Resolved.YellowTapBuffer = { FMath::Max(Resolved.StartPosition, Start - YellowTap->BufferLeadSeconds), Start };
     }
     if (Basic)
     {
@@ -124,6 +151,30 @@ bool UCombatMontageAbility::ResolveTasks(FCombatMontageTasks& OutTasks) const
         }
         Resolved.BasicFollowUpBuffer = { Basic->BufferStartSeconds, Basic->ChainStartSeconds };
         Resolved.BasicFollowUpChain = { Basic->ChainStartSeconds, Basic->EndSeconds };
+    }
+    if (Ultimate)
+    {
+        float Origin = 0.f;
+        float Limit = EndPosition;
+        if (!Ultimate->RelativeToSection.IsNone())
+        {
+            const int32 Index = Resolved.Montage->GetSectionIndex(Ultimate->RelativeToSection);
+            if (Index == INDEX_NONE)
+            {
+                return false;
+            }
+            Resolved.Montage->GetSectionStartAndEndTime(Index, Origin, Limit);
+        }
+        FCombatAbilityWindow LocalWindow;
+        if (!FMath::IsFinite(Ultimate->BufferLeadSeconds) || Ultimate->BufferLeadSeconds < 0.f
+            || !ReadWindow(Ultimate, FMath::Max(0.f, Resolved.StartPosition - Origin),
+                           FMath::Min(Limit, EndPosition) - Origin, LocalWindow))
+        {
+            return false;
+        }
+        const float Start = Origin + LocalWindow.StartSeconds;
+        Resolved.UltimateChain = { Start, Origin + LocalWindow.EndSeconds };
+        Resolved.UltimateBuffer = { FMath::Max(FMath::Max(Origin, Resolved.StartPosition), Start - Ultimate->BufferLeadSeconds), Start };
     }
     OutTasks = Resolved;
     return true;

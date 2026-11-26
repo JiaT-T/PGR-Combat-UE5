@@ -137,6 +137,10 @@ void APGRCombatCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInput
     {
         Input->BindAction(RedOrbAction, ETriggerEvent::Started, this, &ThisClass::OnRedOrbPressed);
     }
+    if (Input && UltimateAction)
+    {
+        Input->BindAction(UltimateAction, ETriggerEvent::Started, this, &ThisClass::OnUltimatePressed);
+    }
     if (Input && YellowOrbAction)
     {
         if (UNanamiFormComponent* Form = FindComponentByClass<UNanamiFormComponent>())
@@ -187,6 +191,12 @@ void APGRCombatCharacter::OnCombatActionChanged(FName, int64, ECombatActionEvent
         }
     }
     Movement->bOrientRotationToMovement = !bActionActive;
+}
+
+// 按下必杀键时沿用统一的动作启动、打断与衔接入口。
+void APGRCombatCharacter::OnUltimatePressed()
+{
+    Combat->SubmitInput(ECombatCommand::Ultimate, ECombatInputPhase::Pressed);
 }
 
 // 向战斗组件提交一次普攻按下指令。

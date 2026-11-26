@@ -10,7 +10,13 @@ DEFINE_LOG_CATEGORY_STATIC(LogPGRCombat, Log, All);
 
 namespace
 {
-    // 技能球共享衔接窗口，并可在确认发动时打断当前普攻。
+    // 短黄在松手时确认，长按成立时仍走原有技能球规则。
+    bool IsYellowTap(ECombatCommand Command, ECombatInputPhase Phase)
+    {
+        return Command == ECombatCommand::YellowOrb && Phase == ECombatInputPhase::Released;
+    }
+
+    // 技能球允许彼此衔接，并可在确认发动时打断当前普攻。
     bool IsSignalOrb(ECombatCommand Command)
     {
         return Command == ECombatCommand::RedOrb || Command == ECombatCommand::BlueOrb || Command == ECombatCommand::YellowOrb;
@@ -64,6 +70,16 @@ ECombatInputResult UCombatComponent::SubmitInput(ECombatCommand Command, ECombat
         }
         return ECombatInputResult::Ignored;
     }
+    if (Command == ECombatCommand::Ultimate)
+    {
+        return Phase == ECombatInputPhase::Pressed
+            ? SubmitUltimate(Scripts->ResolveAction(this, Command, Phase)) : ECombatInputResult::Ignored;
+    }
+    // 已在窗口接收的必杀优先于后到的普攻与技能球。
+    if (BufferedCommand == ECombatCommand::Ultimate && !BufferedActionId.IsNone())
+    {
+        return ECombatInputResult::Rejected;
+    }
     const bool bLocked = IsActionLocked();
     const bool bBasicTap = Command == ECombatCommand::BasicAttack
         && (Phase == ECombatInputPhase::Pressed || Phase == ECombatInputPhase::Released);
@@ -83,7 +99,9 @@ ECombatInputResult UCombatComponent::SubmitInput(ECombatCommand Command, ECombat
         {
             return ECombatInputResult::Rejected;
         }
-        if (Phase == ECombatInputPhase::Pressed && (bLocked || !Scripts->ResolveAction(this, Command, ECombatInputPhase::Held).IsNone()))
+        const bool bUltimateRecovery = ActiveInstanceId != 0 && ActiveCommand == ECombatCommand::Ultimate;
+        if (Phase == ECombatInputPhase::Pressed && !bUltimateRecovery
+            && (bLocked || !Scripts->ResolveAction(this, Command, ECombatInputPhase::Held).IsNone()))
         {
             return BeginBasicPress(Scripts->ResolveAction(this, Command, Phase));
         }
@@ -114,7 +132,8 @@ ECombatInputResult UCombatComponent::SubmitInput(ECombatCommand Command, ECombat
             return TryInterruptBasicAttack(Command, ActionId);
         }
         const bool bCanChain = bBasicFollowUp || Command == ActiveCommand || (IsSignalOrb(Command) && IsSignalOrb(ActiveCommand));
-        const ECombatChainWindow Window = bBasicFollowUp ? Motion->GetBasicFollowUpWindow() : Motion->GetChainWindow();
+        const ECombatChainWindow Window = bBasicFollowUp ? Motion->GetBasicFollowUpWindow()
+            : Motion->GetChainWindow(IsYellowTap(Command, Phase));
         if (!bActivation || !bCanChain || Window == ECombatChainWindow::Closed)
         {
             NotifyAction(ActionId, 0, ECombatActionEvent::Rejected);
@@ -230,6 +249,38 @@ ECombatInputResult UCombatComponent::TryInterruptBasicAttack(ECombatCommand Comm
     return StartAction(Command, ActionId, ECombatActionEvent::Interrupted);
 }
 
+// 待机和普通动作按下即开大，受保护动作只在其 Ability 授权的区间内让出。
+ECombatInputResult UCombatComponent::SubmitUltimate(FName ActionId)
+{
+    if (ActionId.IsNone())
+    {
+        return ECombatInputResult::Ignored;
+    }
+    if (ActiveInstanceId == 0)
+    {
+        return StartAction(ECombatCommand::Ultimate, ActionId, ECombatActionEvent::Completed);
+    }
+    if (ActiveCommand != ECombatCommand::Ultimate)
+    {
+        // 普通输入的完整播放标记独立于必杀打断权，由来源 Ability 决定何时让出。
+        if (!Motion->HasUltimateWindow())
+        {
+            return StartAction(ECombatCommand::Ultimate, ActionId, ECombatActionEvent::Interrupted);
+        }
+        switch (Motion->GetUltimateWindow())
+        {
+        case ECombatChainWindow::Buffer:
+            return BufferInput(ECombatCommand::Ultimate, ECombatInputPhase::Pressed, ActionId, true);
+        case ECombatChainWindow::Chain:
+            return StartAction(ECombatCommand::Ultimate, ActionId, ECombatActionEvent::Chained);
+        default:
+            break;
+        }
+    }
+    NotifyAction(ActionId, 0, ECombatActionEvent::Rejected);
+    return ECombatInputResult::Rejected;
+}
+
 // 先尝试起播，再更新当前实例并通知被替换的动作。
 ECombatInputResult UCombatComponent::StartAction(ECombatCommand Command, FName ActionId, ECombatActionEvent PreviousEvent)
 {
@@ -275,9 +326,18 @@ ECombatInputResult UCombatComponent::StartAction(ECombatCommand Command, FName A
 void UCombatComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* TickFunction)
 {
     Super::TickComponent(DeltaTime, TickType, TickFunction);
+    if (BufferedCommand == ECombatCommand::Ultimate)
+    {
+        if (Motion && Motion->HasReachedUltimateWindow())
+        {
+            ConsumeBufferedInput(ECombatActionEvent::Chained);
+        }
+        return;
+    }
     const bool bBasicFollowUp = BufferedCommand == ECombatCommand::BasicAttack
         && BufferedPhase == ECombatInputPhase::Pressed && HasBasicFollowUp();
-    if (Motion && (bBasicFollowUp ? Motion->HasReachedBasicFollowUpWindow() : Motion->HasReachedChainWindow()))
+    if (Motion && (bBasicFollowUp ? Motion->HasReachedBasicFollowUpWindow()
+        : Motion->HasReachedChainWindow(IsYellowTap(BufferedCommand, BufferedPhase))))
     {
         ConsumeBufferedInput(ECombatActionEvent::Chained);
     }
@@ -296,11 +356,13 @@ bool UCombatComponent::ConsumeBufferedInput(ECombatActionEvent PreviousEvent)
     ClearBufferedInput();
     UGameInstance* Game = GetWorld() ? GetWorld()->GetGameInstance() : nullptr;
     UCombatScriptSubsystem* Scripts = Game ? Game->GetSubsystem<UCombatScriptSubsystem>() : nullptr;
-    if (!Scripts || Scripts->ResolveAction(this, Command, Phase) != ActionId)
+    const FName CurrentAction = Scripts ? Scripts->ResolveAction(this, Command, Phase) : NAME_None;
+    // 必杀缓存的是按键；焚冲分离或切形之后，以真正起播时的武器选择分支。
+    if (CurrentAction.IsNone() || (Command != ECombatCommand::Ultimate && CurrentAction != ActionId))
     {
         return false;
     }
-    return StartAction(Command, ActionId, PreviousEvent) == ECombatInputResult::Started;
+    return StartAction(Command, CurrentAction, PreviousEvent) == ECombatInputResult::Started;
 }
 
 // 起播新招、取消输入或结束实例时撤销旧招的缓冲。
@@ -328,15 +390,15 @@ bool UCombatComponent::TryCancelForMovement()
     {
         return false;
     }
-    StopActiveAction();
+    StopActiveAction(Motion->GetMoveBlendOutSeconds());
     return ActiveInstanceId == 0;
 }
 
 // 保留被打断的实例号，延迟到达的动画结束回调会由结算逻辑去重。
-void UCombatComponent::StopActiveAction()
+void UCombatComponent::StopActiveAction(float BlendOutSeconds)
 {
     const int64 InstanceId = ActiveInstanceId;
-    Motion->StopAction();
+    Motion->StopAction(BlendOutSeconds);
     FinishAction(InstanceId, ECombatActionEvent::Interrupted);
 }
 
