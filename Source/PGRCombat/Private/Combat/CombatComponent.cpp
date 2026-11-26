@@ -10,7 +10,13 @@ DEFINE_LOG_CATEGORY_STATIC(LogPGRCombat, Log, All);
 
 namespace
 {
-    // 技能球共享衔接窗口，并可在确认发动时打断当前普攻。
+    // 短黄在松手时确认，长按成立时仍走原有技能球规则。
+    bool IsYellowTap(ECombatCommand Command, ECombatInputPhase Phase)
+    {
+        return Command == ECombatCommand::YellowOrb && Phase == ECombatInputPhase::Released;
+    }
+
+    // 技能球允许彼此衔接，并可在确认发动时打断当前普攻。
     bool IsSignalOrb(ECombatCommand Command)
     {
         return Command == ECombatCommand::RedOrb || Command == ECombatCommand::BlueOrb || Command == ECombatCommand::YellowOrb;
@@ -126,7 +132,8 @@ ECombatInputResult UCombatComponent::SubmitInput(ECombatCommand Command, ECombat
             return TryInterruptBasicAttack(Command, ActionId);
         }
         const bool bCanChain = bBasicFollowUp || Command == ActiveCommand || (IsSignalOrb(Command) && IsSignalOrb(ActiveCommand));
-        const ECombatChainWindow Window = bBasicFollowUp ? Motion->GetBasicFollowUpWindow() : Motion->GetChainWindow();
+        const ECombatChainWindow Window = bBasicFollowUp ? Motion->GetBasicFollowUpWindow()
+            : Motion->GetChainWindow(IsYellowTap(Command, Phase));
         if (!bActivation || !bCanChain || Window == ECombatChainWindow::Closed)
         {
             NotifyAction(ActionId, 0, ECombatActionEvent::Rejected);
@@ -329,7 +336,8 @@ void UCombatComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActo
     }
     const bool bBasicFollowUp = BufferedCommand == ECombatCommand::BasicAttack
         && BufferedPhase == ECombatInputPhase::Pressed && HasBasicFollowUp();
-    if (Motion && (bBasicFollowUp ? Motion->HasReachedBasicFollowUpWindow() : Motion->HasReachedChainWindow()))
+    if (Motion && (bBasicFollowUp ? Motion->HasReachedBasicFollowUpWindow()
+        : Motion->HasReachedChainWindow(IsYellowTap(BufferedCommand, BufferedPhase))))
     {
         ConsumeBufferedInput(ECombatActionEvent::Chained);
     }

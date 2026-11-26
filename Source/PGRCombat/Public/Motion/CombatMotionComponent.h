@@ -27,7 +27,7 @@ public:
     // 尝试按动作标识播放动画，并在该实例结束时调用回调。
     bool PlayAction(FName ActionId, ECombatCommand Command, FOnMontageEnded OnEnded);
     // 查询本次按下应当被忽略、暂存，还是立即切到下一段。
-    ECombatChainWindow GetChainWindow() const;
+    ECombatChainWindow GetChainWindow(bool bYellowTap = false) const;
     // 当前实例的播放进度是否已进入移动取消窗口。
     bool IsMoveCancelWindowOpen() const;
     // 读取当前动作交接给移动时的姿势淡出时长。
@@ -47,7 +47,7 @@ public:
     // 兼容已有的立即续段查询，提前输入区间不视作已经开窗。
     bool IsInputBufferOpen() const { return GetChainWindow() == ECombatChainWindow::Chain; }
     // 判断一次已缓存的输入是否随动画越过了允许切招的起点。
-    bool HasReachedChainWindow() const;
+    bool HasReachedChainWindow(bool bYellowTap = false) const;
     // 查询当前实例的衔接窗口是否仍在前方，可等待长按意图。
     bool IsBeforeChainWindow() const;
     // 返回本次实际播放的 Ability 是否要求完整收招。
@@ -66,15 +66,20 @@ public:
 private:
     // 按实例 ID 取当前播放，收势窗口也可以读取该实例自然淡出时的播放位置。
     FAnimMontageInstance* GetPlayingInstance(bool bIncludeNaturalBlendOut = false) const;
+    // 只有短黄输入且本招配置了专用窗时，才覆盖通用技能球窗口。
+    bool UsesYellowTapWindow(bool bYellowTap) const { return bYellowTap && YellowTapChain.StartSeconds < YellowTapChain.EndSeconds; }
     TWeakObjectPtr<UAnimInstance> PlayingAnimInstance;
     int32 MontageInstanceId = INDEX_NONE;
     FName ExitSection = NAME_None;
     FCombatAbilityWindow InputBuffer;
     FCombatAbilityWindow ChainWindow;
+    bool bAllowChainDuringNaturalBlendOut = false;
     FCombatAbilityWindow MoveCancelWindow;
     float MoveBlendOutSeconds = 0.f;
     FCombatAbilityWindow BasicFollowUpBuffer;
     FCombatAbilityWindow BasicFollowUpChain;
+    FCombatAbilityWindow YellowTapBuffer;
+    FCombatAbilityWindow YellowTapChain;
     FCombatAbilityWindow UltimateBuffer;
     FCombatAbilityWindow UltimateChain;
     bool bBlendingOutNaturally = false;

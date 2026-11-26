@@ -28,6 +28,7 @@ bool UCombatMontageAbility::ResolveTasks(FCombatMontageTasks& OutTasks) const
     const UCombatChainWindowTask* Chain = nullptr;
     const UCombatMoveCancelWindowTask* MoveCancel = nullptr;
     const UCombatBasicFollowUpTask* Basic = nullptr;
+    const UCombatYellowTapWindowTask* YellowTap = nullptr;
     const UCombatUltimateWindowTask* Ultimate = nullptr;
     FCombatMontageTasks Resolved;
     Resolved.bRequireFullPlayback = bRequireFullPlayback;
@@ -59,6 +60,7 @@ bool UCombatMontageAbility::ResolveTasks(FCombatMontageTasks& OutTasks) const
                 return false;
             }
             Chain = Window;
+            Resolved.bAllowChainDuringNaturalBlendOut = Window->bAllowDuringNaturalBlendOut;
         }
         else if (const auto* MovementWindow = Cast<UCombatMoveCancelWindowTask>(Task))
         {
@@ -76,6 +78,14 @@ bool UCombatMontageAbility::ResolveTasks(FCombatMontageTasks& OutTasks) const
                 return false;
             }
             Basic = FollowUp;
+        }
+        else if (const auto* TapWindow = Cast<UCombatYellowTapWindowTask>(Task))
+        {
+            if (YellowTap || !FMath::IsFinite(TapWindow->BufferLeadSeconds) || TapWindow->BufferLeadSeconds < 0.f)
+            {
+                return false;
+            }
+            YellowTap = TapWindow;
         }
         else if (const auto* InterruptWindow = Cast<UCombatUltimateWindowTask>(Task))
         {
@@ -110,6 +120,7 @@ bool UCombatMontageAbility::ResolveTasks(FCombatMontageTasks& OutTasks) const
     }
     if (!ReadWindow(Buffer, Resolved.StartPosition, EndPosition, Resolved.InputBuffer)
         || !ReadWindow(Chain, Resolved.StartPosition, EndPosition, Resolved.ChainWindow)
+        || !ReadWindow(YellowTap, Resolved.StartPosition, EndPosition, Resolved.YellowTapChain)
         || !ReadWindow(MoveCancel, Resolved.StartPosition, EndPosition, Resolved.MoveCancelWindow))
     {
         return false;
@@ -124,6 +135,11 @@ bool UCombatMontageAbility::ResolveTasks(FCombatMontageTasks& OutTasks) const
     {
         Resolved.MoveCancelWindow = Resolved.ChainWindow;
         Resolved.MoveBlendOutSeconds = GetDefault<UCombatMoveCancelWindowTask>()->BlendOutSeconds;
+    }
+    if (YellowTap)
+    {
+        const float Start = YellowTap->StartSeconds;
+        Resolved.YellowTapBuffer = { FMath::Max(Resolved.StartPosition, Start - YellowTap->BufferLeadSeconds), Start };
     }
     if (Basic)
     {

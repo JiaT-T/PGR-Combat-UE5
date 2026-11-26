@@ -99,10 +99,13 @@ bool UCombatMotionComponent::PlayAction(FName ActionId, ECombatCommand Command, 
     bRequireFullPlayback = Tasks.bRequireFullPlayback;
     InputBuffer = Tasks.InputBuffer;
     ChainWindow = Tasks.ChainWindow;
+    bAllowChainDuringNaturalBlendOut = Tasks.bAllowChainDuringNaturalBlendOut;
     MoveCancelWindow = Tasks.MoveCancelWindow;
     MoveBlendOutSeconds = Tasks.MoveBlendOutSeconds;
     BasicFollowUpBuffer = Tasks.BasicFollowUpBuffer;
     BasicFollowUpChain = Tasks.BasicFollowUpChain;
+    YellowTapBuffer = Tasks.YellowTapBuffer;
+    YellowTapChain = Tasks.YellowTapChain;
     UltimateBuffer = Tasks.UltimateBuffer;
     UltimateChain = Tasks.UltimateChain;
     if (PreviousAnimInstance)
@@ -117,9 +120,13 @@ bool UCombatMotionComponent::PlayAction(FName ActionId, ECombatCommand Command, 
 }
 
 // 先检查直接续段，再接收早按；经过最后一个窗口后的新输入始终被拒绝。
-ECombatChainWindow UCombatMotionComponent::GetChainWindow() const
+ECombatChainWindow UCombatMotionComponent::GetChainWindow(bool bYellowTap) const
 {
-    return ReadChainWindow(GetPlayingInstance(), InputBuffer, ChainWindow);
+    if (UsesYellowTapWindow(bYellowTap))
+    {
+        return ReadChainWindow(GetPlayingInstance(true), YellowTapBuffer, YellowTapChain);
+    }
+    return ReadChainWindow(GetPlayingInstance(bAllowChainDuringNaturalBlendOut), InputBuffer, ChainWindow);
 }
 
 // 移动取消可以发生在自然淡出，仍按同一个 Montage 实例的游标判断。
@@ -156,16 +163,18 @@ bool UCombatMotionComponent::HasReachedBasicFollowUpWindow() const
 }
 
 // 缓存只会在切招起点之前建立，跨帧跳过窄窗口时仍能消费已按下的输入。
-bool UCombatMotionComponent::HasReachedChainWindow() const
+bool UCombatMotionComponent::HasReachedChainWindow(bool bYellowTap) const
 {
-    const FAnimMontageInstance* Instance = GetPlayingInstance();
-    return Instance && Instance->GetPosition() >= ChainWindow.StartSeconds;
+    const bool bUseTapWindow = UsesYellowTapWindow(bYellowTap);
+    const FAnimMontageInstance* Instance = GetPlayingInstance(bUseTapWindow || bAllowChainDuringNaturalBlendOut);
+    const FCombatAbilityWindow& Chain = bUseTapWindow ? YellowTapChain : ChainWindow;
+    return Instance && Instance->GetPosition() >= Chain.StartSeconds;
 }
 
 // 仅当本段还会经过衔接窗口时提前排入下一招。
 bool UCombatMotionComponent::IsBeforeChainWindow() const
 {
-    const FAnimMontageInstance* Instance = GetPlayingInstance();
+    const FAnimMontageInstance* Instance = GetPlayingInstance(bAllowChainDuringNaturalBlendOut);
     return Instance && ChainWindow.StartSeconds < ChainWindow.EndSeconds && Instance->GetPosition() < ChainWindow.StartSeconds;
 }
 
@@ -211,6 +220,8 @@ void UCombatMotionComponent::StopAction(float BlendOutSeconds)
     MoveBlendOutSeconds = 0.f;
     BasicFollowUpBuffer = {};
     BasicFollowUpChain = {};
+    YellowTapBuffer = {};
+    YellowTapChain = {};
     UltimateBuffer = {};
     UltimateChain = {};
     bBlendingOutNaturally = false;
