@@ -19,9 +19,19 @@ class PGRCOMBAT_API UCombatPlayMontageTask : public UCombatAbilityTask
     GENERATED_BODY()
 
 public:
-    // 从头以原速播放完整动作。
+    // 默认从起点播放整段 Montage；选择 Section 时只播放指定段。
     UPROPERTY(EditAnywhere, Category = "Task")
     TObjectPtr<UAnimMontage> Montage = nullptr;
+
+    UPROPERTY(EditAnywhere, Category = "Task")
+    FName Section = NAME_None;
+
+    // 可主动提前结束攻击的 Montage 在这里指定收势段。
+    UPROPERTY(EditAnywhere, Category = "Task")
+    FName ExitSection = NAME_None;
+
+    UPROPERTY(EditAnywhere, Category = "Task", meta = (ClampMin = "0.01"))
+    float PlayRate = 1.f;
 };
 
 UCLASS(Abstract)
@@ -30,7 +40,7 @@ class PGRCOMBAT_API UCombatWindowTask : public UCombatAbilityTask
     GENERATED_BODY()
 
 public:
-    // 从完整 Montage 起点计时，单位为秒。
+    // 默认从 Montage 起点计时；指定参考 Section 的 Task 从该段起点计时。
     UPROPERTY(EditAnywhere, Category = "Task", meta = (ClampMin = "0", Units = "s"))
     float StartSeconds = 0.f;
 
@@ -48,6 +58,69 @@ UCLASS(meta = (DisplayName = "Chain Window"))
 class PGRCOMBAT_API UCombatChainWindowTask : public UCombatWindowTask
 {
     GENERATED_BODY()
+
+public:
+    // 允许在本次 Montage 自然淡出时继续按配置的时间窗接招。
+    UPROPERTY(EditAnywhere, Category = "Task")
+    bool bAllowDuringNaturalBlendOut = false;
+};
+
+// 为再次短按黄球指定独立的窗口，起止位置取当前 Montage 的播放时间。
+UCLASS(meta = (DisplayName = "Yellow Orb Tap Follow-up"))
+class PGRCOMBAT_API UCombatYellowTapWindowTask : public UCombatWindowTask
+{
+    GENERATED_BODY()
+
+public:
+    // 在开窗前的这段时间里，可以缓存一次已经松手的短按。
+    UPROPERTY(EditAnywhere, Category = "Task", meta = (ClampMin = "0", Units = "s"))
+    float BufferLeadSeconds = 0.f;
+};
+
+// 为本招单独指定允许交还移动控制的时间。
+UCLASS(meta = (DisplayName = "Movement Cancel Window"))
+class PGRCOMBAT_API UCombatMoveCancelWindowTask : public UCombatWindowTask
+{
+    GENERATED_BODY()
+
+public:
+    // 方向输入接管后，攻击姿势混入移动姿势的时长。
+    UPROPERTY(EditAnywhere, Category = "Task", meta = (ClampMin = "0", Units = "s"))
+    float BlendOutSeconds = 0.13f;
+};
+
+// 此动作仅在指定区间允许必杀接管。指定 Section 时起止秒数从该段入口计。
+UCLASS(meta = (DisplayName = "Ultimate Interrupt Window"))
+class PGRCOMBAT_API UCombatUltimateWindowTask : public UCombatWindowTask
+{
+    GENERATED_BODY()
+
+public:
+    UPROPERTY(EditAnywhere, Category = "Task")
+    FName RelativeToSection = NAME_None;
+
+    // 开窗前可记住一次必杀输入，提前量不会跨入上一段。
+    UPROPERTY(EditAnywhere, Category = "Task", meta = (ClampMin = "0", Units = "s"))
+    float BufferLeadSeconds = 0.f;
+};
+
+// 允许从本招的收势接普攻。三个时间点均从完整 Montage 起点算起。
+UCLASS(meta = (DisplayName = "Basic Attack Follow-up"))
+class PGRCOMBAT_API UCombatBasicFollowUpTask : public UCombatAbilityTask
+{
+    GENERATED_BODY()
+
+public:
+    // 从此处开始接收提前按下的普攻。
+    UPROPERTY(EditAnywhere, Category = "Task", meta = (ClampMin = "0", Units = "s"))
+    float BufferStartSeconds = 0.f;
+
+    // 从此处起消费缓存，或在按下普攻时立即混入下一招。
+    UPROPERTY(EditAnywhere, Category = "Task", meta = (ClampMin = "0", Units = "s"))
+    float ChainStartSeconds = 0.f;
+
+    UPROPERTY(EditAnywhere, Category = "Task", meta = (ClampMin = "0", Units = "s"))
+    float EndSeconds = 0.f;
 };
 
 // 解析后的窗口快照属于播放实例，默认空区间不会接收输入。
@@ -66,9 +139,22 @@ struct FCombatAbilityWindow
 struct FCombatMontageTasks
 {
     UAnimMontage* Montage = nullptr;
+    FName Section = NAME_None;
+    FName ExitSection = NAME_None;
+    float StartPosition = 0.f;
+    float PlayRate = 1.f;
     bool bRequireFullPlayback = false;
     FCombatAbilityWindow InputBuffer;
     FCombatAbilityWindow ChainWindow;
+    bool bAllowChainDuringNaturalBlendOut = false;
+    FCombatAbilityWindow MoveCancelWindow;
+    float MoveBlendOutSeconds = 0.f;
+    FCombatAbilityWindow BasicFollowUpBuffer;
+    FCombatAbilityWindow BasicFollowUpChain;
+    FCombatAbilityWindow YellowTapBuffer;
+    FCombatAbilityWindow YellowTapChain;
+    FCombatAbilityWindow UltimateBuffer;
+    FCombatAbilityWindow UltimateChain;
 };
 
 // 每个子蓝图配置一招。类默认值只保存编排，每次播放和缓存的状态属于角色。
@@ -81,7 +167,7 @@ public:
     UPROPERTY(EditDefaultsOnly, Category = "Ability")
     ECombatCommand Command = ECombatCommand::BasicAttack;
 
-    // 选中时，普通输入和移动必须等待本实例完整收招。
+    // 完整播放保护普通输入和移动，专用窗口分别控制普攻、移动取消与必杀接管。
     UPROPERTY(EditDefaultsOnly, Category = "Ability")
     bool bRequireFullPlayback = false;
 

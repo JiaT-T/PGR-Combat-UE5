@@ -1,81 +1,71 @@
 #include "Motion/CombatMotionComponent.h"
 
 #include "Animation/AnimInstance.h"
+#include "Combat/NanamiFormComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/Character.h"
 #include "Motion/CombatActionSet.h"
 
 namespace
 {
-    // 将蓝图 Task 或旧版动作条目解析为此次播放使用的配置，两者各自只有一份数据来源。
-    bool ResolvePlayback(const UCombatMotionComponent& Motion, FName ActionId, FCombatActionDefinition& OutAction,
-        FCombatMontageTasks& OutTasks)
+    // 盾斧优先选用当前动作的形态变体，未配置变体的动作沿用默认 Ability。
+    const UCombatMontageAbility* FindAbility(const UCombatActionSet& Set, FName ActionId, const ACharacter& Character)
     {
-        if (!Motion.ActionSet)
+        const auto* Form = Character.FindComponentByClass<UNanamiFormComponent>();
+        if (Form && Form->GetWeaponForm() == ENanamiWeaponForm::ShieldAxe)
         {
-            return false;
-        }
-        if (const auto* AbilityClass = Motion.ActionSet->Abilities.Find(ActionId))
-        {
-            const UCombatMontageAbility* Ability = AbilityClass->GetDefaultObject();
-            if (!Ability || !Ability->ResolveTasks(OutTasks))
+            if (const auto* Variant = Set.ShieldAxeAbilities.Find(ActionId))
             {
-                return false;
+                return Variant->GetDefaultObject();
             }
-            OutAction.Command = Ability->Command;
-            OutAction.Montage = OutTasks.Montage;
-            return true;
         }
+        const auto* Default = Set.Abilities.Find(ActionId);
+        return Default ? Default->GetDefaultObject() : nullptr;
+    }
 
-        const FCombatActionDefinition* Legacy = Motion.ActionSet->Actions.Find(ActionId);
-        if (!Legacy || !Legacy->Montage)
+    // 按当前播放位置区分提前按下和即按即切，关窗后的新按键直接忽略。
+    ECombatChainWindow ReadChainWindow(const FAnimMontageInstance* Instance,
+        const FCombatAbilityWindow& Buffer, const FCombatAbilityWindow& Chain)
+    {
+        if (!Instance)
         {
-            return false;
+            return ECombatChainWindow::Closed;
         }
-        OutAction = *Legacy;
-        const TObjectPtr<UAnimMontage>* Override = Motion.MontageOverrides.Find(ActionId);
-        if (Override && *Override)
+        const float Position = Instance->GetPosition();
+        if (Chain.Contains(Position))
         {
-            OutAction.Montage = *Override;
+            return ECombatChainWindow::Chain;
         }
-        return true;
+        if (Position < Chain.StartSeconds && Buffer.Contains(Position))
+        {
+            return ECombatChainWindow::Buffer;
+        }
+        return ECombatChainWindow::Closed;
     }
 }
 
 // 播放选定的蒙太奇，成功后用新段的混入时长淡出先前的动作。
 bool UCombatMotionComponent::PlayAction(FName ActionId, ECombatCommand Command, FOnMontageEnded OnEnded)
 {
-    FCombatActionDefinition Action;
-    FCombatMontageTasks Tasks;
     const ACharacter* Character = Cast<ACharacter>(GetOwner());
     UAnimInstance* AnimInstance = Character && Character->GetMesh() ? Character->GetMesh()->GetAnimInstance() : nullptr;
-    if (!AnimInstance || !ResolvePlayback(*this, ActionId, Action, Tasks) || !Action.Montage)
+    if (!AnimInstance || !ActionSet)
     {
         return false;
     }
-    if (Action.Command != Command)
+    const UCombatMontageAbility* Ability = FindAbility(*ActionSet, ActionId, *Character);
+    if (!Ability || Ability->Command != Command)
     {
         return false;
     }
-    if (!FMath::IsFinite(Action.PlayRate) || Action.PlayRate <= 0.0f)
+    FCombatMontageTasks Tasks;
+    if (!Ability->ResolveTasks(Tasks))
     {
         return false;
     }
 
-    UAnimMontage* Montage = Action.Montage.Get();
-    float Start = 0.0f;
-    float End = Montage->GetPlayLength();
-    if (!Action.Section.IsNone())
-    {
-        const int32 Index = Montage->GetSectionIndex(Action.Section);
-        if (Index == INDEX_NONE)
-        {
-            return false;
-        }
-        Montage->GetSectionStartAndEndTime(Index, Start, End);
-    }
-
-    if (AnimInstance->Montage_Play(Montage, Action.PlayRate, EMontagePlayReturnType::MontageLength, Start, false) <= 0.0f)
+    UAnimMontage* Montage = Tasks.Montage;
+    if (AnimInstance->Montage_Play(Montage, Tasks.PlayRate, EMontagePlayReturnType::MontageLength, Tasks.StartPosition, false) <= 0.0f)
     {
         return false;
     }
@@ -85,10 +75,10 @@ bool UCombatMotionComponent::PlayAction(FName ActionId, ECombatCommand Command, 
     {
         return false;
     }
-    if (!Action.Section.IsNone())
+    if (!Tasks.Section.IsNone())
     {
         // 一个 Section 可以对应一招，同一 Montage 的下一段由新输入驱动。
-        AnimInstance->Montage_SetNextSection(Action.Section, NAME_None, Montage);
+        AnimInstance->Montage_SetNextSection(Tasks.Section, NAME_None, Montage);
     }
 
     Instance->OnMontageEnded = MoveTemp(OnEnded);
@@ -96,14 +86,28 @@ bool UCombatMotionComponent::PlayAction(FName ActionId, ECombatCommand Command, 
     const int32 PreviousInstanceId = MontageInstanceId;
     PlayingAnimInstance = AnimInstance;
     MontageInstanceId = Instance->GetInstanceID();
+    bBlendingOutNaturally = false;
+    // UE 在自然淡出开始时就把实例标为非活动，此时收势窗口仍可能接受普攻。
+    Instance->OnMontageBlendingOutStarted.BindWeakLambda(this, [this, Id = MontageInstanceId](UAnimMontage*, bool bInterrupted)
+    {
+        if (MontageInstanceId == Id)
+        {
+            bBlendingOutNaturally = !bInterrupted;
+        }
+    });
+    ExitSection = Tasks.ExitSection;
     bRequireFullPlayback = Tasks.bRequireFullPlayback;
     InputBuffer = Tasks.InputBuffer;
     ChainWindow = Tasks.ChainWindow;
-    if (Action.InputBufferSeconds > 0.f)
-    {
-        ChainWindow.StartSeconds = FMath::Clamp(End - Action.InputBufferSeconds, Start, End);
-        ChainWindow.EndSeconds = End;
-    }
+    bAllowChainDuringNaturalBlendOut = Tasks.bAllowChainDuringNaturalBlendOut;
+    MoveCancelWindow = Tasks.MoveCancelWindow;
+    MoveBlendOutSeconds = Tasks.MoveBlendOutSeconds;
+    BasicFollowUpBuffer = Tasks.BasicFollowUpBuffer;
+    BasicFollowUpChain = Tasks.BasicFollowUpChain;
+    YellowTapBuffer = Tasks.YellowTapBuffer;
+    YellowTapChain = Tasks.YellowTapChain;
+    UltimateBuffer = Tasks.UltimateBuffer;
+    UltimateChain = Tasks.UltimateChain;
     if (PreviousAnimInstance)
     {
         FAnimMontageInstance* Previous = PreviousAnimInstance->GetMontageInstanceForID(PreviousInstanceId);
@@ -116,45 +120,71 @@ bool UCombatMotionComponent::PlayAction(FName ActionId, ECombatCommand Command, 
 }
 
 // 先检查直接续段，再接收早按；经过最后一个窗口后的新输入始终被拒绝。
-ECombatChainWindow UCombatMotionComponent::GetChainWindow() const
+ECombatChainWindow UCombatMotionComponent::GetChainWindow(bool bYellowTap) const
 {
-    const FAnimMontageInstance* Instance = GetPlayingInstance();
-    if (!Instance)
+    if (UsesYellowTapWindow(bYellowTap))
     {
-        return ECombatChainWindow::Closed;
+        return ReadChainWindow(GetPlayingInstance(true), YellowTapBuffer, YellowTapChain);
     }
-    const float Position = Instance->GetPosition();
-    if (ChainWindow.Contains(Position))
-    {
-        return ECombatChainWindow::Chain;
-    }
-    if (Position < ChainWindow.StartSeconds && InputBuffer.Contains(Position))
-    {
-        return ECombatChainWindow::Buffer;
-    }
-    return ECombatChainWindow::Closed;
+    return ReadChainWindow(GetPlayingInstance(bAllowChainDuringNaturalBlendOut), InputBuffer, ChainWindow);
+}
+
+// 移动取消可以发生在自然淡出，仍按同一个 Montage 实例的游标判断。
+bool UCombatMotionComponent::IsMoveCancelWindowOpen() const
+{
+    const FAnimMontageInstance* Instance = GetPlayingInstance(true);
+    return Instance && MoveCancelWindow.Contains(Instance->GetPosition());
+}
+
+// 允许普攻专用窗口延伸至本次 Montage 的自然淡出。
+ECombatChainWindow UCombatMotionComponent::GetBasicFollowUpWindow() const
+{
+    return ReadChainWindow(GetPlayingInstance(true), BasicFollowUpBuffer, BasicFollowUpChain);
+}
+
+// 按本次 Montage 的实际游标判断必杀窗口，也支持跳入焚冲收势段。
+ECombatChainWindow UCombatMotionComponent::GetUltimateWindow() const
+{
+    return ReadChainWindow(GetPlayingInstance(true), UltimateBuffer, UltimateChain);
+}
+
+// 允许已缓存的按键在两次更新之间跨过开窗点。
+bool UCombatMotionComponent::HasReachedUltimateWindow() const
+{
+    const FAnimMontageInstance* Instance = GetPlayingInstance(true);
+    return HasUltimateWindow() && Instance && Instance->GetPosition() >= UltimateChain.StartSeconds;
+}
+
+// 已接受的普攻输入在跨帧经过切招点时仍然有效。
+bool UCombatMotionComponent::HasReachedBasicFollowUpWindow() const
+{
+    const FAnimMontageInstance* Instance = GetPlayingInstance(true);
+    return HasBasicFollowUp() && Instance && Instance->GetPosition() >= BasicFollowUpChain.StartSeconds;
 }
 
 // 缓存只会在切招起点之前建立，跨帧跳过窄窗口时仍能消费已按下的输入。
-bool UCombatMotionComponent::HasReachedChainWindow() const
+bool UCombatMotionComponent::HasReachedChainWindow(bool bYellowTap) const
 {
-    const FAnimMontageInstance* Instance = GetPlayingInstance();
-    return Instance && Instance->GetPosition() >= ChainWindow.StartSeconds;
+    const bool bUseTapWindow = UsesYellowTapWindow(bYellowTap);
+    const FAnimMontageInstance* Instance = GetPlayingInstance(bUseTapWindow || bAllowChainDuringNaturalBlendOut);
+    const FCombatAbilityWindow& Chain = bUseTapWindow ? YellowTapChain : ChainWindow;
+    return Instance && Instance->GetPosition() >= Chain.StartSeconds;
 }
 
 // 仅当本段还会经过衔接窗口时提前排入下一招。
 bool UCombatMotionComponent::IsBeforeChainWindow() const
 {
-    const FAnimMontageInstance* Instance = GetPlayingInstance();
+    const FAnimMontageInstance* Instance = GetPlayingInstance(bAllowChainDuringNaturalBlendOut);
     return Instance && ChainWindow.StartSeconds < ChainWindow.EndSeconds && Instance->GetPosition() < ChainWindow.StartSeconds;
 }
 
 // 按已记录的实例编号定位动画，拒绝访问已结束的实例。
-FAnimMontageInstance* UCombatMotionComponent::GetPlayingInstance() const
+FAnimMontageInstance* UCombatMotionComponent::GetPlayingInstance(bool bIncludeNaturalBlendOut) const
 {
     UAnimInstance* Anim = PlayingAnimInstance.Get();
     FAnimMontageInstance* Instance = Anim ? Anim->GetMontageInstanceForID(MontageInstanceId) : nullptr;
-    return Instance && Instance->IsActive() ? Instance : nullptr;
+    return Instance && Instance->IsValid() && (!Instance->IsStopped() || (bIncludeNaturalBlendOut && bBlendingOutNaturally))
+        ? Instance : nullptr;
 }
 
 // 获取当前实际播放的 Section，供武器和动作状态同步。
@@ -181,14 +211,30 @@ bool UCombatMotionComponent::JumpForwardToActionSection(FName Section)
 }
 
 // 按实例编号停止组件先前启动的蒙太奇并清除跟踪记录。
-void UCombatMotionComponent::StopAction()
+void UCombatMotionComponent::StopAction(float BlendOutSeconds)
 {
-    UAnimInstance* AnimInstance = PlayingAnimInstance.Get();
-    FAnimMontageInstance* Instance = AnimInstance ? AnimInstance->GetMontageInstanceForID(MontageInstanceId) : nullptr;
+    FAnimMontageInstance* Instance = GetPlayingInstance(true);
     MontageInstanceId = INDEX_NONE;
+    ExitSection = NAME_None;
+    MoveCancelWindow = {};
+    MoveBlendOutSeconds = 0.f;
+    BasicFollowUpBuffer = {};
+    BasicFollowUpChain = {};
+    YellowTapBuffer = {};
+    YellowTapChain = {};
+    UltimateBuffer = {};
+    UltimateChain = {};
+    bBlendingOutNaturally = false;
     PlayingAnimInstance.Reset();
-    if (Instance && Instance->IsActive())
+    if (Instance)
     {
-        Instance->Stop(FAlphaBlend(0.0f));
+        if (BlendOutSeconds > 0.f)
+        {
+            // 淡出的旧实例只贡献姿势，胶囊从开窗当帧起由角色移动组件驱动。
+            Instance->PushDisableRootMotion();
+        }
+        FAlphaBlend BlendOut(BlendOutSeconds);
+        BlendOut.SetBlendOption(EAlphaBlendOption::CubicInOut);
+        Instance->Stop(BlendOut);
     }
 }

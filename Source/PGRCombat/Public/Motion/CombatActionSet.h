@@ -1,34 +1,9 @@
 #pragma once
 
-#include "Combat/CombatTypes.h"
 #include "Engine/DataAsset.h"
 #include "CombatActionSet.generated.h"
 
-class UAnimMontage;
 class UCombatMontageAbility;
-
-USTRUCT(BlueprintType)
-struct PGRCOMBAT_API FCombatActionDefinition
-{
-    GENERATED_BODY()
-
-    // 已有普攻数据沿用默认指令，技能条目显式选择自身的输入。
-    UPROPERTY(EditAnywhere, Category = "Input")
-    ECombatCommand Command = ECombatCommand::BasicAttack;
-
-    UPROPERTY(EditAnywhere, Category = "Animation")
-    TObjectPtr<UAnimMontage> Montage = nullptr;
-
-    UPROPERTY(EditAnywhere, Category = "Animation")
-    FName Section = NAME_None;
-
-    UPROPERTY(EditAnywhere, Category = "Animation", meta = (ClampMin = "0.01"))
-    float PlayRate = 1.0f;
-
-    // 按动画本地时间从段末倒推，调播放速率时窗口仍对齐同一段姿势。
-    UPROPERTY(EditAnywhere, Category = "Input", meta = (ClampMin = "0.0", Units = "s"))
-    float InputBufferSeconds = 0.0f;
-};
 
 UCLASS(BlueprintType)
 class PGRCOMBAT_API UCombatActionSet : public UDataAsset
@@ -36,10 +11,11 @@ class PGRCOMBAT_API UCombatActionSet : public UDataAsset
     GENERATED_BODY()
 
 public:
-    UPROPERTY(EditAnywhere, Category = "Actions")
-    TMap<FName, FCombatActionDefinition> Actions;
-
-    // 新招式绑定到独立 Ability 蓝图，播放和时间窗由该蓝图的 Task 配置。
+    // 默认形态和形态共用的动作。每条 Ability 配置完整的播放与窗口数据。
     UPROPERTY(EditAnywhere, Category = "Actions")
     TMap<FName, TSubclassOf<UCombatMontageAbility>> Abilities;
+
+    // 盾斧独有的表现沿用同一个动作标识，但可以使用与原 Montage 长度匹配的独立窗口。
+    UPROPERTY(EditAnywhere, Category = "Actions")
+    TMap<FName, TSubclassOf<UCombatMontageAbility>> ShieldAxeAbilities;
 };

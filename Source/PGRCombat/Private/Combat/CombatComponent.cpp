@@ -10,7 +10,13 @@ DEFINE_LOG_CATEGORY_STATIC(LogPGRCombat, Log, All);
 
 namespace
 {
-    // 技能球共享衔接窗口，并可在确认发动时打断当前普攻。
+    // 短黄在松手时确认，长按成立时仍走原有技能球规则。
+    bool IsYellowTap(ECombatCommand Command, ECombatInputPhase Phase)
+    {
+        return Command == ECombatCommand::YellowOrb && Phase == ECombatInputPhase::Released;
+    }
+
+    // 技能球允许彼此衔接，并可在确认发动时打断当前普攻。
     bool IsSignalOrb(ECombatCommand Command)
     {
         return Command == ECombatCommand::RedOrb || Command == ECombatCommand::BlueOrb || Command == ECombatCommand::YellowOrb;
@@ -64,7 +70,21 @@ ECombatInputResult UCombatComponent::SubmitInput(ECombatCommand Command, ECombat
         }
         return ECombatInputResult::Ignored;
     }
-    if (IsActionLocked())
+    if (Command == ECombatCommand::Ultimate)
+    {
+        return Phase == ECombatInputPhase::Pressed
+            ? SubmitUltimate(Scripts->ResolveAction(this, Command, Phase)) : ECombatInputResult::Ignored;
+    }
+    // 已在窗口接收的必杀优先于后到的普攻与技能球。
+    if (BufferedCommand == ECombatCommand::Ultimate && !BufferedActionId.IsNone())
+    {
+        return ECombatInputResult::Rejected;
+    }
+    const bool bLocked = IsActionLocked();
+    const bool bBasicTap = Command == ECombatCommand::BasicAttack
+        && (Phase == ECombatInputPhase::Pressed || Phase == ECombatInputPhase::Released);
+    const bool bBasicFollowUp = bBasicTap && HasBasicFollowUp();
+    if (bLocked && !bBasicFollowUp)
     {
         return ECombatInputResult::Rejected;
     }
@@ -74,8 +94,14 @@ ECombatInputResult UCombatComponent::SubmitInput(ECombatCommand Command, ECombat
         {
             return ReleaseBasicPress();
         }
-        // 只有当前形态可用长按时才启用手势识别，剑盾保持按下即出招。
-        if (Phase == ECombatInputPhase::Pressed && !Scripts->ResolveAction(this, Command, ECombatInputPhase::Held).IsNone())
+        // 重击只接受收势窗里的新短按，持续按住不能把它再次接成重击。
+        if (bLocked && Phase == ECombatInputPhase::Pressed && Motion->GetBasicFollowUpWindow() == ECombatChainWindow::Closed)
+        {
+            return ECombatInputResult::Rejected;
+        }
+        const bool bUltimateRecovery = ActiveInstanceId != 0 && ActiveCommand == ECombatCommand::Ultimate;
+        if (Phase == ECombatInputPhase::Pressed && !bUltimateRecovery
+            && (bLocked || !Scripts->ResolveAction(this, Command, ECombatInputPhase::Held).IsNone()))
         {
             return BeginBasicPress(Scripts->ResolveAction(this, Command, Phase));
         }
@@ -105,8 +131,9 @@ ECombatInputResult UCombatComponent::SubmitInput(ECombatCommand Command, ECombat
         {
             return TryInterruptBasicAttack(Command, ActionId);
         }
-        const bool bCanChain = Command == ActiveCommand || (IsSignalOrb(Command) && IsSignalOrb(ActiveCommand));
-        const ECombatChainWindow Window = Motion->GetChainWindow();
+        const bool bCanChain = bBasicFollowUp || Command == ActiveCommand || (IsSignalOrb(Command) && IsSignalOrb(ActiveCommand));
+        const ECombatChainWindow Window = bBasicFollowUp ? Motion->GetBasicFollowUpWindow()
+            : Motion->GetChainWindow(IsYellowTap(Command, Phase));
         if (!bActivation || !bCanChain || Window == ECombatChainWindow::Closed)
         {
             NotifyAction(ActionId, 0, ECombatActionEvent::Rejected);
@@ -139,7 +166,8 @@ ECombatInputResult UCombatComponent::BeginBasicPress(FName TapAction)
     }
     // 首段已经发动，松手只结束手势；若持续按住，达到阈值后按首段的衔接窗转重击。
     TapActionAtPress = bIdleLight ? NAME_None : TapAction;
-    bTapAcceptedAtPress = !bIdleLight && Motion->GetChainWindow() != ECombatChainWindow::Closed;
+    const ECombatChainWindow Window = HasBasicFollowUp() ? Motion->GetBasicFollowUpWindow() : Motion->GetChainWindow();
+    TapWindowInstanceId = !bIdleLight && Window != ECombatChainWindow::Closed ? ActiveInstanceId : 0;
     BasicPressedAt = GetWorld()->GetTimeSeconds();
     GetWorld()->GetTimerManager().SetTimer(BasicHoldTimer, this, &ThisClass::ConfirmBasicHold, BasicHoldThresholdSeconds, false);
     return bIdleLight ? ECombatInputResult::Started : ECombatInputResult::Buffered;
@@ -150,7 +178,7 @@ ECombatInputResult UCombatComponent::ReleaseBasicPress()
 {
     const bool bHeld = GetWorld()->GetTimeSeconds() - BasicPressedAt >= BasicHoldThresholdSeconds;
     const FName TapAction = TapActionAtPress;
-    const bool bAccepted = bTapAcceptedAtPress;
+    const bool bAccepted = TapWindowInstanceId != 0 && TapWindowInstanceId == ActiveInstanceId;
     ResetBasicPress();
     if (bHeld)
     {
@@ -165,7 +193,7 @@ ECombatInputResult UCombatComponent::ReleaseBasicPress()
         NotifyAction(TapAction, 0, ECombatActionEvent::Rejected);
         return ECombatInputResult::Rejected;
     }
-    if (ActiveInstanceId != 0 && Motion->IsBeforeChainWindow())
+    if (HasBasicFollowUp() ? !Motion->HasReachedBasicFollowUpWindow() : Motion->IsBeforeChainWindow())
     {
         return BufferInput(ECombatCommand::BasicAttack, ECombatInputPhase::Pressed, TapAction, true);
     }
@@ -184,6 +212,7 @@ void UCombatComponent::ResetBasicPress()
 {
     BasicPressedAt = -1.0;
     TapActionAtPress = NAME_None;
+    TapWindowInstanceId = 0;
     GetWorld()->GetTimerManager().ClearTimer(BasicHoldTimer);
 }
 
@@ -203,6 +232,12 @@ bool UCombatComponent::IsActionLocked() const
     return ActiveInstanceId != 0 && Motion && Motion->RequiresFullPlayback();
 }
 
+// 动作配置决定能否跨指令接普攻，空闲或普通动作不继承上一招的窗口。
+bool UCombatComponent::HasBasicFollowUp() const
+{
+    return ActiveInstanceId != 0 && Motion && Motion->HasBasicFollowUp();
+}
+
 // 检查替换指令能否打断普攻，符合条件时由新动作接管实例。
 ECombatInputResult UCombatComponent::TryInterruptBasicAttack(ECombatCommand Command, FName ActionId)
 {
@@ -214,11 +249,45 @@ ECombatInputResult UCombatComponent::TryInterruptBasicAttack(ECombatCommand Comm
     return StartAction(Command, ActionId, ECombatActionEvent::Interrupted);
 }
 
+// 待机和普通动作按下即开大，受保护动作只在其 Ability 授权的区间内让出。
+ECombatInputResult UCombatComponent::SubmitUltimate(FName ActionId)
+{
+    if (ActionId.IsNone())
+    {
+        return ECombatInputResult::Ignored;
+    }
+    if (ActiveInstanceId == 0)
+    {
+        return StartAction(ECombatCommand::Ultimate, ActionId, ECombatActionEvent::Completed);
+    }
+    if (ActiveCommand != ECombatCommand::Ultimate)
+    {
+        // 普通输入的完整播放标记独立于必杀打断权，由来源 Ability 决定何时让出。
+        if (!Motion->HasUltimateWindow())
+        {
+            return StartAction(ECombatCommand::Ultimate, ActionId, ECombatActionEvent::Interrupted);
+        }
+        switch (Motion->GetUltimateWindow())
+        {
+        case ECombatChainWindow::Buffer:
+            return BufferInput(ECombatCommand::Ultimate, ECombatInputPhase::Pressed, ActionId, true);
+        case ECombatChainWindow::Chain:
+            return StartAction(ECombatCommand::Ultimate, ActionId, ECombatActionEvent::Chained);
+        default:
+            break;
+        }
+    }
+    NotifyAction(ActionId, 0, ECombatActionEvent::Rejected);
+    return ECombatInputResult::Rejected;
+}
+
 // 先尝试起播，再更新当前实例并通知被替换的动作。
 ECombatInputResult UCombatComponent::StartAction(ECombatCommand Command, FName ActionId, ECombatActionEvent PreviousEvent)
 {
     const int64 PreviousInstanceId = ActiveInstanceId;
     const FName PreviousActionId = ActiveActionId;
+    const bool bPreserveBasicHold = PreviousInstanceId != 0 && PreviousEvent == ECombatActionEvent::Chained
+        && Command == ECombatCommand::BasicAttack && ActiveCommand == Command && !IsActionLocked();
     const int64 InstanceId = ++LastInstanceId;
     const FOnMontageEnded Ended = FOnMontageEnded::CreateUObject(this, &UCombatComponent::OnMontageEnded, InstanceId);
     if (!Motion->PlayAction(ActionId, Command, Ended))
@@ -227,8 +296,7 @@ ECombatInputResult UCombatComponent::StartAction(ECombatCommand Command, FName A
         return ECombatInputResult::Rejected;
     }
 
-    if (PreviousInstanceId != 0 && PreviousEvent == ECombatActionEvent::Chained
-        && Command == ECombatCommand::BasicAttack && ActiveCommand == Command)
+    if (bPreserveBasicHold)
     {
         // 前一个按键的缓存刚续段，新按键仍可变成长按，但不能重复确认旧段轻击。
         TapActionAtPress = NAME_None;
@@ -258,7 +326,18 @@ ECombatInputResult UCombatComponent::StartAction(ECombatCommand Command, FName A
 void UCombatComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* TickFunction)
 {
     Super::TickComponent(DeltaTime, TickType, TickFunction);
-    if (Motion && Motion->HasReachedChainWindow())
+    if (BufferedCommand == ECombatCommand::Ultimate)
+    {
+        if (Motion && Motion->HasReachedUltimateWindow())
+        {
+            ConsumeBufferedInput(ECombatActionEvent::Chained);
+        }
+        return;
+    }
+    const bool bBasicFollowUp = BufferedCommand == ECombatCommand::BasicAttack
+        && BufferedPhase == ECombatInputPhase::Pressed && HasBasicFollowUp();
+    if (Motion && (bBasicFollowUp ? Motion->HasReachedBasicFollowUpWindow()
+        : Motion->HasReachedChainWindow(IsYellowTap(BufferedCommand, BufferedPhase))))
     {
         ConsumeBufferedInput(ECombatActionEvent::Chained);
     }
@@ -277,11 +356,13 @@ bool UCombatComponent::ConsumeBufferedInput(ECombatActionEvent PreviousEvent)
     ClearBufferedInput();
     UGameInstance* Game = GetWorld() ? GetWorld()->GetGameInstance() : nullptr;
     UCombatScriptSubsystem* Scripts = Game ? Game->GetSubsystem<UCombatScriptSubsystem>() : nullptr;
-    if (!Scripts || Scripts->ResolveAction(this, Command, Phase) != ActionId)
+    const FName CurrentAction = Scripts ? Scripts->ResolveAction(this, Command, Phase) : NAME_None;
+    // 必杀缓存的是按键；焚冲分离或切形之后，以真正起播时的武器选择分支。
+    if (CurrentAction.IsNone() || (Command != ECombatCommand::Ultimate && CurrentAction != ActionId))
     {
         return false;
     }
-    return StartAction(Command, ActionId, PreviousEvent) == ECombatInputResult::Started;
+    return StartAction(Command, CurrentAction, PreviousEvent) == ECombatInputResult::Started;
 }
 
 // 起播新招、取消输入或结束实例时撤销旧招的缓冲。
@@ -291,15 +372,34 @@ void UCombatComponent::ClearBufferedInput()
     SetComponentTickEnabled(false);
 }
 
-// 停止当前动画，并用其原实例编号结算打断。
+// 普通打断遵守完整播放保护，组件退出时仍可停止当前动作。
 void UCombatComponent::InterruptActiveAction()
 {
-    const int64 InstanceId = ActiveInstanceId;
-    if (InstanceId != 0 && (bEndingPlay || !IsActionLocked()))
+    if (ActiveInstanceId != 0 && (bEndingPlay || !IsActionLocked()))
     {
-        Motion->StopAction();
-        FinishAction(InstanceId, ECombatActionEvent::Interrupted);
+        StopActiveAction();
     }
+}
+
+// 已缓存的出招和在当前窗口受理的轻击优先，方向键只在允许的时段接管。
+bool UCombatComponent::TryCancelForMovement()
+{
+    const bool bPendingTap = TapWindowInstanceId == ActiveInstanceId && !TapActionAtPress.IsNone();
+    if (bEndingPlay || ActiveInstanceId == 0 || !Motion || !BufferedActionId.IsNone()
+        || bPendingTap || !Motion->IsMoveCancelWindowOpen())
+    {
+        return false;
+    }
+    StopActiveAction(Motion->GetMoveBlendOutSeconds());
+    return ActiveInstanceId == 0;
+}
+
+// 保留被打断的实例号，延迟到达的动画结束回调会由结算逻辑去重。
+void UCombatComponent::StopActiveAction(float BlendOutSeconds)
+{
+    const int64 InstanceId = ActiveInstanceId;
+    Motion->StopAction(BlendOutSeconds);
+    FinishAction(InstanceId, ECombatActionEvent::Interrupted);
 }
 
 // 将蒙太奇的结束回调转成对应实例的自然收招或打断事件。
@@ -323,7 +423,8 @@ void UCombatComponent::FinishAction(int64 InstanceId, ECombatActionEvent Event)
     }
 
     const FName ActionId = ActiveActionId;
-    if (Event == ECombatActionEvent::Interrupted)
+    // 锁定动作中的按住只可被确认为本实例的短按，不能在自然收刀后变成下一次重击。
+    if (Event == ECombatActionEvent::Interrupted || IsActionLocked())
     {
         ResetBasicPress();
     }

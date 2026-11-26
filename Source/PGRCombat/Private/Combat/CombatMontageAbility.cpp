@@ -4,15 +4,15 @@
 
 namespace
 {
-    // 可选窗口缺席时保留空区间，已添加的窗口必须完整落在 Montage 上。
-    bool ReadWindow(const UCombatWindowTask* Task, float Length, FCombatAbilityWindow& OutWindow)
+    // 窗口使用 Montage 的绝对播放位置，且必须完整落在本次实际播放的范围内。
+    bool ReadWindow(const UCombatWindowTask* Task, float Start, float End, FCombatAbilityWindow& OutWindow)
     {
         if (!Task)
         {
             return true;
         }
-        if (!(Task->StartSeconds >= 0.f && Task->StartSeconds < Task->EndSeconds
-            && Task->EndSeconds <= Length + UE_KINDA_SMALL_NUMBER))
+        if (!(Task->StartSeconds >= Start - UE_KINDA_SMALL_NUMBER && Task->StartSeconds >= 0.f
+            && Task->StartSeconds < Task->EndSeconds && Task->EndSeconds <= End + UE_KINDA_SMALL_NUMBER))
         {
             return false;
         }
@@ -26,17 +26,24 @@ bool UCombatMontageAbility::ResolveTasks(FCombatMontageTasks& OutTasks) const
 {
     const UCombatInputBufferTask* Buffer = nullptr;
     const UCombatChainWindowTask* Chain = nullptr;
+    const UCombatMoveCancelWindowTask* MoveCancel = nullptr;
+    const UCombatBasicFollowUpTask* Basic = nullptr;
+    const UCombatYellowTapWindowTask* YellowTap = nullptr;
+    const UCombatUltimateWindowTask* Ultimate = nullptr;
     FCombatMontageTasks Resolved;
     Resolved.bRequireFullPlayback = bRequireFullPlayback;
     for (const UCombatAbilityTask* Task : Tasks)
     {
         if (const auto* Play = Cast<UCombatPlayMontageTask>(Task))
         {
-            if (Resolved.Montage || !Play->Montage)
+            if (Resolved.Montage || !Play->Montage || !FMath::IsFinite(Play->PlayRate) || Play->PlayRate <= 0.f)
             {
                 return false;
             }
             Resolved.Montage = Play->Montage;
+            Resolved.PlayRate = Play->PlayRate;
+            Resolved.Section = Play->Section;
+            Resolved.ExitSection = Play->ExitSection;
         }
         else if (const auto* Input = Cast<UCombatInputBufferTask>(Task))
         {
@@ -53,6 +60,40 @@ bool UCombatMontageAbility::ResolveTasks(FCombatMontageTasks& OutTasks) const
                 return false;
             }
             Chain = Window;
+            Resolved.bAllowChainDuringNaturalBlendOut = Window->bAllowDuringNaturalBlendOut;
+        }
+        else if (const auto* MovementWindow = Cast<UCombatMoveCancelWindowTask>(Task))
+        {
+            if (MoveCancel || !FMath::IsFinite(MovementWindow->BlendOutSeconds) || MovementWindow->BlendOutSeconds < 0.f)
+            {
+                return false;
+            }
+            MoveCancel = MovementWindow;
+            Resolved.MoveBlendOutSeconds = MoveCancel->BlendOutSeconds;
+        }
+        else if (const auto* FollowUp = Cast<UCombatBasicFollowUpTask>(Task))
+        {
+            if (Basic)
+            {
+                return false;
+            }
+            Basic = FollowUp;
+        }
+        else if (const auto* TapWindow = Cast<UCombatYellowTapWindowTask>(Task))
+        {
+            if (YellowTap || !FMath::IsFinite(TapWindow->BufferLeadSeconds) || TapWindow->BufferLeadSeconds < 0.f)
+            {
+                return false;
+            }
+            YellowTap = TapWindow;
+        }
+        else if (const auto* InterruptWindow = Cast<UCombatUltimateWindowTask>(Task))
+        {
+            if (Ultimate)
+            {
+                return false;
+            }
+            Ultimate = InterruptWindow;
         }
         else
         {
@@ -63,8 +104,24 @@ bool UCombatMontageAbility::ResolveTasks(FCombatMontageTasks& OutTasks) const
     {
         return false;
     }
-    const float Length = Resolved.Montage->GetPlayLength();
-    if (!ReadWindow(Buffer, Length, Resolved.InputBuffer) || !ReadWindow(Chain, Length, Resolved.ChainWindow))
+    float EndPosition = Resolved.Montage->GetPlayLength();
+    if (!Resolved.Section.IsNone())
+    {
+        const int32 Index = Resolved.Montage->GetSectionIndex(Resolved.Section);
+        if (Index == INDEX_NONE || !Resolved.ExitSection.IsNone())
+        {
+            return false;
+        }
+        Resolved.Montage->GetSectionStartAndEndTime(Index, Resolved.StartPosition, EndPosition);
+    }
+    if (!Resolved.ExitSection.IsNone() && Resolved.Montage->GetSectionIndex(Resolved.ExitSection) == INDEX_NONE)
+    {
+        return false;
+    }
+    if (!ReadWindow(Buffer, Resolved.StartPosition, EndPosition, Resolved.InputBuffer)
+        || !ReadWindow(Chain, Resolved.StartPosition, EndPosition, Resolved.ChainWindow)
+        || !ReadWindow(YellowTap, Resolved.StartPosition, EndPosition, Resolved.YellowTapChain)
+        || !ReadWindow(MoveCancel, Resolved.StartPosition, EndPosition, Resolved.MoveCancelWindow))
     {
         return false;
     }
@@ -72,6 +129,52 @@ bool UCombatMontageAbility::ResolveTasks(FCombatMontageTasks& OutTasks) const
     if (!Chain)
     {
         Resolved.ChainWindow = Resolved.InputBuffer;
+    }
+    // 普通动作沿用实际切招窗口，受完整播放保护的动作依赖单独配置。
+    if (!MoveCancel && !bRequireFullPlayback)
+    {
+        Resolved.MoveCancelWindow = Resolved.ChainWindow;
+        Resolved.MoveBlendOutSeconds = GetDefault<UCombatMoveCancelWindowTask>()->BlendOutSeconds;
+    }
+    if (YellowTap)
+    {
+        const float Start = YellowTap->StartSeconds;
+        Resolved.YellowTapBuffer = { FMath::Max(Resolved.StartPosition, Start - YellowTap->BufferLeadSeconds), Start };
+    }
+    if (Basic)
+    {
+        if (!(Basic->BufferStartSeconds >= 0.f && Basic->BufferStartSeconds >= Resolved.StartPosition - UE_KINDA_SMALL_NUMBER
+            && Basic->BufferStartSeconds <= Basic->ChainStartSeconds && Basic->ChainStartSeconds < Basic->EndSeconds
+            && Basic->EndSeconds <= EndPosition + UE_KINDA_SMALL_NUMBER))
+        {
+            return false;
+        }
+        Resolved.BasicFollowUpBuffer = { Basic->BufferStartSeconds, Basic->ChainStartSeconds };
+        Resolved.BasicFollowUpChain = { Basic->ChainStartSeconds, Basic->EndSeconds };
+    }
+    if (Ultimate)
+    {
+        float Origin = 0.f;
+        float Limit = EndPosition;
+        if (!Ultimate->RelativeToSection.IsNone())
+        {
+            const int32 Index = Resolved.Montage->GetSectionIndex(Ultimate->RelativeToSection);
+            if (Index == INDEX_NONE)
+            {
+                return false;
+            }
+            Resolved.Montage->GetSectionStartAndEndTime(Index, Origin, Limit);
+        }
+        FCombatAbilityWindow LocalWindow;
+        if (!FMath::IsFinite(Ultimate->BufferLeadSeconds) || Ultimate->BufferLeadSeconds < 0.f
+            || !ReadWindow(Ultimate, FMath::Max(0.f, Resolved.StartPosition - Origin),
+                           FMath::Min(Limit, EndPosition) - Origin, LocalWindow))
+        {
+            return false;
+        }
+        const float Start = Origin + LocalWindow.StartSeconds;
+        Resolved.UltimateChain = { Start, Origin + LocalWindow.EndSeconds };
+        Resolved.UltimateBuffer = { FMath::Max(FMath::Max(Origin, Resolved.StartPosition), Start - Ultimate->BufferLeadSeconds), Start };
     }
     OutTasks = Resolved;
     return true;

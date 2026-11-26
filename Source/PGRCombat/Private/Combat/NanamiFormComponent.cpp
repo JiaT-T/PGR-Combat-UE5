@@ -11,11 +11,10 @@ namespace
     const FName SwordToAxe(TEXT("YellowSwordToAxe"));
     const FName AxeToSword(TEXT("YellowAxeToSword"));
     const FName YellowHold(TEXT("YellowHold"));
-    const FName LastAttackSection(TEXT("Attack47"));
-    const FName ReturnSection(TEXT("Attack48"));
+    const FName AxeUltimate(TEXT("Attack52"));
 }
 
-// 平时关闭组件 Tick，焚冲开始后才推进星芒消耗。
+// 平时关闭组件 Tick，在焚冲和盾斧必杀期间跟踪收势。
 UNanamiFormComponent::UNanamiFormComponent()
 {
     PrimaryComponentTick.bCanEverTick = true;
@@ -76,7 +75,7 @@ void UNanamiFormComponent::ConsumeStarlight(float Amount)
     }
 }
 
-// 攻击段按时间耗星；末段回切时先恢复剑盾待机姿态，再让 Montage 淡出。
+// 焚冲攻击段按时间耗星，盾斧必杀在普攻缓冲开启时回切剑盾。
 void UNanamiFormComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* TickFunction)
 {
     Super::TickComponent(DeltaTime, TickType, TickFunction);
@@ -85,16 +84,31 @@ void UNanamiFormComponent::TickComponent(float DeltaTime, ELevelTick TickType, F
         return;
     }
 
-    const FName Section = Motion->GetCurrentActionSection();
-    if (Section == LastAttackSection || Motion->IsBeforeActionSection(LastAttackSection))
+    if (UltimateReturnInstanceId != 0)
+    {
+        if (Combat && Combat->GetActiveInstanceId() == UltimateReturnInstanceId
+            && Motion->GetBasicFollowUpWindow() != ECombatChainWindow::Closed)
+        {
+            SetWeaponForm(ENanamiWeaponForm::SwordShield);
+            SetComponentTickEnabled(false);
+        }
+        return;
+    }
+    if (Motion->IsBeforeActionSection(Motion->GetExitSection()))
     {
         ConsumeStarlight(StarlightDrainPerSecond * DeltaTime);
     }
-    else if (Section == ReturnSection)
+    else if (IsYellowHoldExitSection(Motion->GetCurrentActionSection()))
     {
         SetWeaponForm(ENanamiWeaponForm::SwordShield);
         SetComponentTickEnabled(false);
     }
+}
+
+// 校验当前焚冲实例并匹配其 Ability 指定的收势段。
+bool UNanamiFormComponent::IsYellowHoldExitSection(FName Section) const
+{
+    return HoldInstanceId != 0 && Motion && !Section.IsNone() && Section == Motion->GetExitSection();
 }
 
 // 每次真正的按下只建立一个计时器，收刀期间忽略新的手势。
@@ -151,16 +165,21 @@ void UNanamiFormComponent::RequestYellowExit()
 {
     if (HoldInstanceId != 0 && Combat && Combat->GetActiveInstanceId() == HoldInstanceId && Motion)
     {
-        Motion->JumpForwardToActionSection(ReturnSection);
+        Motion->JumpForwardToActionSection(Motion->GetExitSection());
     }
 }
 
-// 仅随已确认的实例变更形态；整个长按退出后统一回到剑盾待机。
+// 同步切形、焚冲和盾斧必杀的已确认实例，并在对应实例退出时收回武器。
 void UNanamiFormComponent::OnActionChanged(FName ActionId, int64 InstanceId, ECombatActionEvent Event)
 {
     if (Event == ECombatActionEvent::Started && Combat->GetActiveInstanceId() == InstanceId)
     {
-        if (ActionId == YellowHold)
+        if (ActionId == AxeUltimate)
+        {
+            UltimateReturnInstanceId = InstanceId;
+            SetComponentTickEnabled(true);
+        }
+        else if (ActionId == YellowHold)
         {
             HoldInstanceId = InstanceId;
             SetComponentTickEnabled(true);
@@ -174,6 +193,13 @@ void UNanamiFormComponent::OnActionChanged(FName ActionId, int64 InstanceId, ECo
         {
             SetWeaponForm(ENanamiWeaponForm::SwordShield);
         }
+    }
+    else if (ActionId == AxeUltimate && UltimateReturnInstanceId != 0 && InstanceId == UltimateReturnInstanceId
+        && Event != ECombatActionEvent::Rejected)
+    {
+        UltimateReturnInstanceId = 0;
+        SetWeaponForm(ENanamiWeaponForm::SwordShield);
+        SetComponentTickEnabled(false);
     }
     else if (ActionId == YellowHold && HoldInstanceId != 0 && InstanceId == HoldInstanceId
         && Event != ECombatActionEvent::Rejected)
@@ -191,17 +217,6 @@ void UNanamiFormComponent::SetWeaponForm(ENanamiWeaponForm NewForm)
     if (WeaponForm != NewForm)
     {
         WeaponForm = NewForm;
-        if (Motion)
-        {
-            if (NewForm == ENanamiWeaponForm::ShieldAxe)
-            {
-                Motion->MontageOverrides = ShieldAxeMontages;
-            }
-            else
-            {
-                Motion->MontageOverrides.Reset();
-            }
-        }
         OnWeaponFormChanged.Broadcast(NewForm);
     }
 }
