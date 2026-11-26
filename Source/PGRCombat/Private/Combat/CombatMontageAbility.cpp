@@ -62,11 +62,12 @@ bool UCombatMontageAbility::ResolveTasks(FCombatMontageTasks& OutTasks) const
         }
         else if (const auto* MovementWindow = Cast<UCombatMoveCancelWindowTask>(Task))
         {
-            if (MoveCancel)
+            if (MoveCancel || !FMath::IsFinite(MovementWindow->BlendOutSeconds) || MovementWindow->BlendOutSeconds < 0.f)
             {
                 return false;
             }
             MoveCancel = MovementWindow;
+            Resolved.MoveBlendOutSeconds = MoveCancel->BlendOutSeconds;
         }
         else if (const auto* FollowUp = Cast<UCombatBasicFollowUpTask>(Task))
         {
@@ -122,6 +123,7 @@ bool UCombatMontageAbility::ResolveTasks(FCombatMontageTasks& OutTasks) const
     if (!MoveCancel && !bRequireFullPlayback)
     {
         Resolved.MoveCancelWindow = Resolved.ChainWindow;
+        Resolved.MoveBlendOutSeconds = GetDefault<UCombatMoveCancelWindowTask>()->BlendOutSeconds;
     }
     if (Basic)
     {

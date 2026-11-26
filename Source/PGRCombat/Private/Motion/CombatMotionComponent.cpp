@@ -100,6 +100,7 @@ bool UCombatMotionComponent::PlayAction(FName ActionId, ECombatCommand Command, 
     InputBuffer = Tasks.InputBuffer;
     ChainWindow = Tasks.ChainWindow;
     MoveCancelWindow = Tasks.MoveCancelWindow;
+    MoveBlendOutSeconds = Tasks.MoveBlendOutSeconds;
     BasicFollowUpBuffer = Tasks.BasicFollowUpBuffer;
     BasicFollowUpChain = Tasks.BasicFollowUpChain;
     UltimateBuffer = Tasks.UltimateBuffer;
@@ -201,12 +202,13 @@ bool UCombatMotionComponent::JumpForwardToActionSection(FName Section)
 }
 
 // 按实例编号停止组件先前启动的蒙太奇并清除跟踪记录。
-void UCombatMotionComponent::StopAction()
+void UCombatMotionComponent::StopAction(float BlendOutSeconds)
 {
     FAnimMontageInstance* Instance = GetPlayingInstance(true);
     MontageInstanceId = INDEX_NONE;
     ExitSection = NAME_None;
     MoveCancelWindow = {};
+    MoveBlendOutSeconds = 0.f;
     BasicFollowUpBuffer = {};
     BasicFollowUpChain = {};
     UltimateBuffer = {};
@@ -215,6 +217,13 @@ void UCombatMotionComponent::StopAction()
     PlayingAnimInstance.Reset();
     if (Instance)
     {
-        Instance->Stop(FAlphaBlend(0.0f));
+        if (BlendOutSeconds > 0.f)
+        {
+            // 淡出的旧实例只贡献姿势，胶囊从开窗当帧起由角色移动组件驱动。
+            Instance->PushDisableRootMotion();
+        }
+        FAlphaBlend BlendOut(BlendOutSeconds);
+        BlendOut.SetBlendOption(EAlphaBlendOption::CubicInOut);
+        Instance->Stop(BlendOut);
     }
 }

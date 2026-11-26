@@ -382,15 +382,15 @@ bool UCombatComponent::TryCancelForMovement()
     {
         return false;
     }
-    StopActiveAction();
+    StopActiveAction(Motion->GetMoveBlendOutSeconds());
     return ActiveInstanceId == 0;
 }
 
 // 保留被打断的实例号，延迟到达的动画结束回调会由结算逻辑去重。
-void UCombatComponent::StopActiveAction()
+void UCombatComponent::StopActiveAction(float BlendOutSeconds)
 {
     const int64 InstanceId = ActiveInstanceId;
-    Motion->StopAction();
+    Motion->StopAction(BlendOutSeconds);
     FinishAction(InstanceId, ECombatActionEvent::Interrupted);
 }
 

@@ -30,6 +30,8 @@ public:
     ECombatChainWindow GetChainWindow() const;
     // 当前实例的播放进度是否已进入移动取消窗口。
     bool IsMoveCancelWindowOpen() const;
+    // 读取当前动作交接给移动时的姿势淡出时长。
+    float GetMoveBlendOutSeconds() const { return MoveBlendOutSeconds; }
     // 查询当前实例是否配置了专门接普攻的收势窗口，结束回调中仍可读取。
     bool HasBasicFollowUp() const { return BasicFollowUpChain.StartSeconds < BasicFollowUpChain.EndSeconds; }
     // 读取普攻专用窗口，其他指令沿用各自的衔接规则。
@@ -58,8 +60,8 @@ public:
     bool IsBeforeActionSection(FName Section) const;
     // 仅向前跳到指定段，重复请求不会重播已经开始的段。
     bool JumpForwardToActionSection(FName Section);
-    // 立即停止本组件跟踪的动作动画。
-    void StopAction();
+    // 解除旧实例的控制权，并按指定时长混出其姿势。
+    void StopAction(float BlendOutSeconds = 0.f);
 
 private:
     // 按实例 ID 取当前播放，收势窗口也可以读取该实例自然淡出时的播放位置。
@@ -70,6 +72,7 @@ private:
     FCombatAbilityWindow InputBuffer;
     FCombatAbilityWindow ChainWindow;
     FCombatAbilityWindow MoveCancelWindow;
+    float MoveBlendOutSeconds = 0.f;
     FCombatAbilityWindow BasicFollowUpBuffer;
     FCombatAbilityWindow BasicFollowUpChain;
     FCombatAbilityWindow UltimateBuffer;

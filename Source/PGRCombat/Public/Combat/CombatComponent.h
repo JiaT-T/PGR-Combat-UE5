@@ -80,7 +80,7 @@ private:
     bool ConsumeBufferedInput(ECombatActionEvent PreviousEvent);
 
     // 停止已经获准打断的活动实例，统一处理缓存和结束事件。
-    void StopActiveAction();
+    void StopActiveAction(float BlendOutSeconds = 0.f);
     // 接收指定动作实例的动画结束通知。
     void OnMontageEnded(UAnimMontage* Montage, bool bInterrupted, int64 InstanceId);
     // 结束给定实例并广播本次结算结果。

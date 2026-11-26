@@ -65,6 +65,11 @@ UCLASS(meta = (DisplayName = "Movement Cancel Window"))
 class PGRCOMBAT_API UCombatMoveCancelWindowTask : public UCombatWindowTask
 {
     GENERATED_BODY()
+
+public:
+    // 方向输入接管后，攻击姿势混入移动姿势的时长。
+    UPROPERTY(EditAnywhere, Category = "Task", meta = (ClampMin = "0", Units = "s"))
+    float BlendOutSeconds = 0.13f;
 };
 
 // 此动作仅在指定区间允许必杀接管。指定 Section 时起止秒数从该段入口计。
@@ -125,6 +130,7 @@ struct FCombatMontageTasks
     FCombatAbilityWindow InputBuffer;
     FCombatAbilityWindow ChainWindow;
     FCombatAbilityWindow MoveCancelWindow;
+    float MoveBlendOutSeconds = 0.f;
     FCombatAbilityWindow BasicFollowUpBuffer;
     FCombatAbilityWindow BasicFollowUpChain;
     FCombatAbilityWindow UltimateBuffer;
