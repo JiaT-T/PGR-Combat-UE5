@@ -37,6 +37,17 @@ private:
     UPROPERTY(Config, EditDefaultsOnly, Category = "Framing")
     TSet<FName> SmoothedFramingActions;
 
+    // 仅在 Attack99 腾空段使用招式镜头，收势回到普通跟随。
+    void ApplyAttack99CameraPreview(const ACharacter& Character, FMinimalViewInfo& View, float DeltaTime);
+    int64 CameraPreviewInstance = 0;
+    FVector CameraPreviewStart = FVector::ZeroVector;
+    FQuat CameraPreviewHeading = FQuat::Identity;
+    FVector CameraPreviewPosition = FVector::ZeroVector;
+    FQuat CameraPreviewRotation = FQuat::Identity;
+    float CameraPreviewHorizontalFov = 0.f;
+    float CameraPreviewLastWeight = 0.f;
+    bool bCameraPreviewLogged = false;
+
     double LastPullback = 0.0;
     bool bSettlingFraming = false;
 };
