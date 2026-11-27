@@ -2,8 +2,10 @@
 
 #include "Combat/CombatTypes.h"
 #include "Components/ActorComponent.h"
+#include "UObject/SoftObjectPtr.h"
 #include "NanamiFormComponent.generated.h"
 
+class AGameModeBase;
 class UCombatComponent;
 class UCombatMotionComponent;
 
@@ -16,7 +18,7 @@ enum class ENanamiWeaponForm : uint8
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FNanamiFormChanged, ENanamiWeaponForm, Form);
 
-UCLASS(ClassGroup = (Combat), meta = (BlueprintSpawnableComponent))
+UCLASS(Config = Game, ClassGroup = (Combat), meta = (BlueprintSpawnableComponent))
 class PGRCOMBAT_API UNanamiFormComponent : public UActorComponent
 {
     GENERATED_BODY()
@@ -42,6 +44,10 @@ public:
     // 返回黄球和盾斧招式共用的星芒值。
     UFUNCTION(BlueprintPure, Category = "Form")
     float GetStarlight() const { return Starlight; }
+
+    // 查询点黄切盾斧的星芒条件，训练场可单独放宽这次短按。
+    UFUNCTION(BlueprintPure, Category = "Form")
+    bool HasStarlightForSwordToAxe() const;
 
     // 起手续轮必须重新按键，有残余时可再发动一轮。
     UFUNCTION(BlueprintPure, Category = "Form")
@@ -89,6 +95,9 @@ private:
     TObjectPtr<UCombatMotionComponent> Motion;
     UPROPERTY(EditDefaultsOnly, Category = "Training", meta = (ClampMin = "0", ClampMax = "100"))
     float InitialStarlight = 100.f;
+    // 仅指定的训练模式允许低星芒点黄切盾斧，长按仍按实际星芒结算。
+    UPROPERTY(Config)
+    TSoftClassPtr<AGameModeBase> StarlightFreeTapTrainingMode;
     // 训练用输入阈值，单位为游戏秒。
     UPROPERTY(EditDefaultsOnly, Category = "Yellow Orb", meta = (ClampMin = "0.01", Units = "s"))
     float HoldThresholdSeconds = 0.30f;
