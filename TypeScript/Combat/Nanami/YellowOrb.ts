@@ -5,8 +5,8 @@ export interface NanamiForm {
     GetWeaponForm(): ENanamiWeaponForm;
     // 查询当前形态是否允许发动红球和蓝球。
     CanUseRedBlueOrbs(): boolean;
-    // 获取当前剩余星芒。
-    GetStarlight(): number;
+    // 查询点黄切盾斧所需的星芒条件是否成立。
+    HasStarlightForSwordToAxe(): boolean;
     // 查询本次重新按住是否达到发起焚冲的条件。
     CanStartYellowHold(): boolean;
 }
@@ -19,7 +19,7 @@ export function resolveYellowOrb(form: NanamiForm, phase: string): string {
     if (phase === "Released") {
         switch (form.GetWeaponForm()) {
             case ENanamiWeaponForm.SwordShield:
-                return form.GetStarlight() >= 50 ? "YellowSwordToAxe" : "";
+                return form.HasStarlightForSwordToAxe() ? "YellowSwordToAxe" : "";
             case ENanamiWeaponForm.ShieldAxe:
                 return "YellowAxeToSword";
         }
