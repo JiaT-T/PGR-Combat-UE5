@@ -67,12 +67,22 @@ private:
     // 回收本次播放创建的渲染组件。
     static void DestroyPlayback(FPlayback& Effect);
 
+    // 从实际剑刃世界轨迹生成第四段拖尾，而不是重播预览相机的轨迹。
+    void TickSwordTrail(float Time);
+    void ResetSwordTrail();
+    TWeakObjectPtr<UProceduralMeshComponent> SwordTrail;
+    TArray<FTransform> SwordTrailPoses;
+    TArray<float> SwordTrailTimes;
+    int32 SwordTrailMontage = INDEX_NONE;
+    bool bSwordTrailLogged = false;
+
     TArray<FCue> Cues;
     TArray<int32> Pending;
     TArray<FPlayback> Active;
     TMap<FString, TUniquePtr<FClip>> Clips;
     TWeakObjectPtr<USkeletalMeshComponent> CharacterMesh;
     TWeakObjectPtr<UAnimInstance> PlannedAnim;
+    bool bYellowHoldExitSeen = true;
     int32 PlannedMontageId = INDEX_NONE;
     float PlannedSectionStart = 0;
     double YellowReturnStartPelvisZ = 0.0;

@@ -1,4 +1,6 @@
-#include "NanamiLocalVfxComponent.h"
+﻿#include "NanamiLocalVfxComponent.h"
+#include "Motion/CombatMotionComponent.h"
+#include "Combat/CombatComponent.h"
 
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimMontage.h"
@@ -40,6 +42,16 @@ namespace
     // 多段斩击以各自的出手点锁定世界位置，避免第二刀仍留在起跑点。
     int32 WorldPlantFrame(const FString& Clip, const FString& Layer)
     {
+        // 每道扫击只在出光前跟随当时朝向，之后留在世界坐标，避免把预烘焙挥斧再旋转一次。
+        const int32 AxeLayer = Layer.StartsWith(TEXT("A6")) ? FCString::Atoi(*Layer.Mid(5, 2)) : INDEX_NONE;
+        if (Clip == TEXT("Attack61_Ex") || Clip == TEXT("Attack64_Ex") || Clip == TEXT("Attack64_ExImpact")) return 2;
+        if (Clip == TEXT("Attack62_Ex")) return AxeLayer < 13 ? 2 : 38;
+        if (Clip == TEXT("Attack62_ExImpact")) return AxeLayer < 40 ? 2 : 38;
+        if (Clip == TEXT("Attack63_Ex")) return AxeLayer < 14 ? 10 : AxeLayer < 26 ? 25 : 46;
+        if (Clip == TEXT("Attack61") || Clip == TEXT("Attack64")) return 2;
+        if (Clip == TEXT("Attack62")) return AxeLayer < 8 ? 2 : 38;
+        if (Clip == TEXT("Attack62_Impact")) return AxeLayer < 26 ? 2 : 38;
+        if (Clip == TEXT("Attack63")) return AxeLayer < 8 ? 10 : AxeLayer < 16 ? 25 : 46;
         if (Clip == TEXT("Attack01")) return Layer.StartsWith(TEXT("Qiliu")) ? 2 : 8;
         if (Clip == TEXT("Attack02")) return Layer.StartsWith(TEXT("G2")) ? 25 : 8;
         if (Clip == TEXT("Attack03"))
@@ -77,6 +89,19 @@ namespace
                 Material.SetScalarParameterValue(TEXT("FrameFade"), Q->Z * FMath::Pow(1.0f - T, Q->W));
             }
         }
+        else if (Clip == TEXT("Attack03_Blade"))
+        {
+            const float Fade = (Layer == TEXT("A101_L04_Ring") || Layer == TEXT("A101_L05_Line") ||
+                Layer == TEXT("A101_L06_LineA")) ? .14f :
+                (Layer == TEXT("A101_L08_Par") || Layer == TEXT("A101_L09_Suduxian")) ? .19f :
+                (Layer == TEXT("A101_L02_Lighitng") || Layer == TEXT("A101_L03_Path") || Layer == TEXT("A101_L10_Path")) ? .32f :
+                Layer == TEXT("A101_L07_wave") ? .30f : 1.f;
+            Material.SetScalarParameterValue(TEXT("FrameFade"), Fade);
+        }
+        else if (Clip == TEXT("Attack03_Air"))
+        {
+            Material.SetScalarParameterValue(TEXT("FrameFade"), .37f);
+        }
         else if (Clip == TEXT("Attack02") && Layer == TEXT("G2_An"))
         {
             const float Tail = FMath::SmoothStep(34.f, 39.f, float(Frame)) * (1.f - FMath::SmoothStep(41.f, 44.f, float(Frame)));
@@ -96,7 +121,9 @@ void UNanamiLocalVfxComponent::TrackMontage(USkeletalMeshComponent& Mesh, UAnimI
         ActionId == TEXT("YellowAxeToSword") ? TEXT("AM_YellowTapAxeToSword") :
         TEXT("AM_Equipped") + ActionId.ToString();
     if (!Owner || !Mesh.GetWorld() || !Mesh.GetWorld()->IsGameWorld() || Mesh.GetWorld()->GetNetMode() == NM_DedicatedServer ||
-        Montage.GetName() != ExpectedMontage)
+        (Montage.GetName() != ExpectedMontage &&
+         !(ActionId == TEXT("DodgeBack") && (Montage.GetFName() == TEXT("AM_SwordDodgeBack") || Montage.GetFName() == TEXT("AM_AxeDodgeBack"))) &&
+         !(ActionId == TEXT("DodgeTravel") && (Montage.GetFName() == TEXT("AM_SwordDodgeTravel") || Montage.GetFName() == TEXT("AM_AxeDodgeTravel")))))
     {
         return;
     }
@@ -119,7 +146,13 @@ void UNanamiLocalVfxComponent::TrackMontage(USkeletalMeshComponent& Mesh, UAnimI
     {
         Vfx->YellowReturnStartPelvisZ = Mesh.GetSocketTransform(PelvisAnchor, RTS_Component).GetLocation().Z;
     }
+    Vfx->ResetSwordTrail();
+    if (ActionId == TEXT("Attack04"))
+    {
+        Vfx->SwordTrailMontage = InstanceId;
+    }
     Vfx->Pending.Reset();
+    Vfx->bYellowHoldExitSeen = ActionId != TEXT("YellowHold");
     for (int32 I = 0; I < Vfx->Cues.Num(); ++I)
     {
         if (Vfx->Cues[I].Action == ActionId)
@@ -150,7 +183,8 @@ bool UNanamiLocalVfxComponent::ReplacesFirstHit(const USkeletalMeshComponent* Me
 bool UNanamiLocalVfxComponent::ReadCues()
 {
     TArray<FString> Lines;
-    if (!FFileHelper::LoadFileToStringArray(Lines, *DataPath(TEXT("cues.csv"))))
+    const TCHAR* CueFile = FParse::Param(FCommandLine::Get(), TEXT("AxeBaseVfx")) ? TEXT("cues-base.csv") : TEXT("cues.csv");
+    if (!FFileHelper::LoadFileToStringArray(Lines, *DataPath(CueFile)))
     {
         return false;
     }
@@ -237,18 +271,49 @@ FTransform UNanamiLocalVfxComponent::GetOrigin(const FCue& Cue) const
         return FTransform::Identity;
     }
     FTransform Origin;
-    if (Cue.Anchor == TEXT("Weapon") && Mesh->DoesSocketExist(WeaponAnchor))
+    FName AttachBone = NAME_None;
+    if (Cue.Anchor == TEXT("Weapon")) AttachBone = WeaponAnchor;
+    else if (Cue.Anchor == TEXT("Prop1")) AttachBone = TEXT("Bip001Prop1");
+    else if (Cue.Anchor == TEXT("Sword03Blade")) AttachBone = TEXT("Blade_WeaponBone1");
+    else if (Cue.Anchor == TEXT("Sword03Shield")) AttachBone = TEXT("Aegis_WeaponCenter");
+    else if (Cue.Anchor == TEXT("Weapon2")) AttachBone = TEXT("Aegis_WeaponBone2");
+    else if (Cue.Anchor == TEXT("LeftFoot")) AttachBone = TEXT("Bip001LFoot");
+    else if (Cue.Anchor == TEXT("RightFoot")) AttachBone = TEXT("Bip001RFoot");
+    if (!AttachBone.IsNone() && !Mesh->DoesSocketExist(AttachBone))
     {
-        Origin = Mesh->GetSocketTransform(WeaponAnchor);
+        UE_LOG(LogNanamiLocalVfx, Warning, TEXT("PGR_VFX_MISSING_ANCHOR %s %s"), *Cue.Clip, *AttachBone.ToString());
+    }
+    if (!AttachBone.IsNone() && Mesh->DoesSocketExist(AttachBone))
+    {
+        Origin = Mesh->GetSocketTransform(AttachBone);
     }
     else
     {
-        const FRotator Facing(0, OwnerCharacter->GetActorRotation().Yaw, 0);
+        // 四段的源网格沿反方向旋转，用实机斧刃上挑向量校正，保持相对角色朝向。
+        const double SwingYaw = (Cue.Clip == TEXT("Attack64") || Cue.Clip == TEXT("Attack64_Ex")) ? -145.0 : 0.0;
+        const bool bDodge = Cue.Anchor == TEXT("DodgeGround");
+        double Yaw = OwnerCharacter->GetActorRotation().Yaw + SwingYaw;
+        if (bDodge && Cue.Action == TEXT("DodgeTravel"))
+        {
+            if (const UCombatComponent* Combat = OwnerCharacter->FindComponentByClass<UCombatComponent>())
+            {
+                const FVector Direction = Combat->GetActiveDodgeDirection();
+                if (!Direction.IsNearlyZero())
+                {
+                    Yaw = Direction.Rotation().Yaw;
+                }
+            }
+        }
+        const FRotator Facing(0, Yaw, 0);
         FVector P = Mesh->GetComponentLocation();
-        if (Cue.Anchor == TEXT("Ground"))
+        if (Cue.Anchor == TEXT("Ground") || bDodge)
         {
             const UCapsuleComponent* Capsule = OwnerCharacter->GetCapsuleComponent();
-            const FVector Foot = Capsule->GetComponentLocation() - FVector(0, 0, Capsule->GetScaledCapsuleHalfHeight());
+            FVector Foot = Capsule->GetComponentLocation() - FVector(0, 0, Capsule->GetScaledCapsuleHalfHeight());
+            if (Cue.Clip == TEXT("Attack62_Impact") || Cue.Clip.EndsWith(TEXT("_ExImpact")))
+            {
+                Foot += Facing.RotateVector(FVector(Cue.Offset.X, Cue.Offset.Y, 0));
+            }
             FHitResult Hit;
             FCollisionQueryParams Query(SCENE_QUERY_STAT(LocalVfxGround), false, OwnerCharacter);
             P = GetWorld()->LineTraceSingleByChannel(Hit, Foot + FVector(0, 0, 25), Foot - FVector(0, 0, 320),
@@ -263,7 +328,29 @@ FTransform UNanamiLocalVfxComponent::GetOrigin(const FCue& Cue) const
         }
         Origin = FTransform(Facing, P);
     }
-    Origin.AddToTranslation(Origin.GetRotation().RotateVector(Cue.Offset));
+    const FVector LocalOffset = Cue.Clip == TEXT("Attack62_Impact") || Cue.Clip.EndsWith(TEXT("_ExImpact"))
+        ? FVector(0, 0, Cue.Offset.Z) : Cue.Offset;
+    if (Cue.Anchor == TEXT("Sword03Blade") && Mesh->DoesSocketExist(AttachBone) &&
+        Mesh->DoesSocketExist(TEXT("Blade_WeaponCenter")))
+    {
+        const FVector Hilt = Origin.GetLocation();
+        const FVector End = Mesh->GetSocketLocation(TEXT("Blade_WeaponCenter"));
+        const FVector Axis = (End - Hilt).GetSafeNormal();
+        if (!Axis.IsNearlyZero())
+        {
+            const FVector Up = Origin.GetRotation().GetAxisZ();
+            Origin.SetRotation(FRotationMatrix::MakeFromXZ(Axis, Up).ToQuat());
+            Origin.SetLocation(Hilt + Axis * 47.f);
+        }
+    }
+    if (Cue.Anchor == TEXT("Sword03Shield") && Mesh->DoesSocketExist(AttachBone))
+    {
+        // Use the face axis of the in-game shield socket;
+        // the halo clip is authored in XY (local normal Z).
+        const FQuat ShieldFrame = Origin.GetRotation();
+        Origin.SetRotation(FRotationMatrix::MakeFromZX(ShieldFrame.GetAxisZ(), ShieldFrame.GetAxisX()).ToQuat());
+    }
+    Origin.AddToTranslation(Origin.GetRotation().RotateVector(LocalOffset));
     Origin.SetScale3D(FVector(Cue.Scale));
     return Origin;
 }
@@ -294,7 +381,10 @@ void UNanamiLocalVfxComponent::StartCue(const FCue& Cue, int32 MontageId, double
     {
         const FString& Layer = Clip->Layers[I];
         const FString Asset = FString::Printf(TEXT("MI_%s"), *Layer);
-        const FString Path = FString::Printf(TEXT("/Game/LocalOnly/NanamiVfx/%s/Native/%s.%s"), *Cue.Clip, *Asset, *Asset);
+        const FString Scope = Cue.Clip == TEXT("Attack03_SwordCharge")
+            ? (Layer.StartsWith(TEXT("A102")) ? TEXT("Attack04_Charge") :
+                Layer.StartsWith(TEXT("A101")) ? TEXT("Attack03_Blade") : TEXT("Attack03_Air")) : Cue.Clip;
+        const FString Path = FString::Printf(TEXT("/Game/LocalOnly/NanamiVfx/%s/Native/%s.%s"), *Scope, *Asset, *Asset);
         UMaterialInterface* Material = LoadObject<UMaterialInterface>(nullptr, *Path);
         if (!Material)
         {
@@ -306,7 +396,18 @@ void UNanamiLocalVfxComponent::StartCue(const FCue& Cue, int32 MontageId, double
         Part->SetMobility(EComponentMobility::Movable);
         Part->SetCollisionEnabled(ECollisionEnabled::NoCollision);
         Part->SetCastShadow(false);
-        Part->SetTranslucentSortPriority(I);
+        const bool bAxeEdge = Cue.Clip.EndsWith(TEXT("_Ex")) &&
+            (Layer.EndsWith(TEXT("_Saw")) || Layer.EndsWith(TEXT("_SawA")));
+        Part->SetTranslucentSortPriority(bAxeEdge ? 70 + I : I);
+        if (Layer.EndsWith(TEXT("_Mask")) && !Layer.StartsWith(TEXT("L")) &&
+            (Cue.Clip.EndsWith(TEXT("_ExImpact")) || Cue.Clip.StartsWith(TEXT("Attack43_")) || Cue.Clip.StartsWith(TEXT("Attack44_")) ||
+             Cue.Clip.StartsWith(TEXT("Attack99_")) || Cue.Clip.StartsWith(TEXT("Attack48_"))))
+        {
+            Part->SetRenderInMainPass(false);
+            Part->SetRenderInDepthPass(false);
+            Part->SetRenderCustomDepth(true);
+            Part->SetCustomDepthStencilValue(Cue.Clip == TEXT("Attack64_ExImpact") ? 6 : 1);
+        }
         Part->SetWorldTransform(Effect.Origin);
         Part->SetMaterial(0, UMaterialInstanceDynamic::Create(Material, Part));
         Part->SetVisibility(false);
@@ -344,14 +445,59 @@ void UNanamiLocalVfxComponent::ApplyFrame(FPlayback& Effect, int32 Frame) const
             continue;
         }
         const FString& Layer = Clip.Layers[L];
-        const bool bWorld = Effect.Cue.Anchor == TEXT("World") || Effect.Cue.Clip == TEXT("Attack31_Weapon");
+        if (Effect.Cue.Clip == TEXT("Attack64_ExImpact"))
+        {
+            FString OmitLayers;
+            if (FParse::Value(FCommandLine::Get(),TEXT("AxeOmitLayers="),OmitLayers) && OmitLayers.Contains(Layer))
+            {
+                Part->SetVisibility(false);
+                continue;
+            }
+        }
+        const int32 AxeLayer = Layer.StartsWith(TEXT("A6")) ? FCString::Atoi(*Layer.Mid(5, 2)) : INDEX_NONE;
+        const bool bAxeFollowup = (Effect.Cue.Clip == TEXT("Attack62") && AxeLayer >= 8) ||
+            (Effect.Cue.Clip == TEXT("Attack62_Ex") && AxeLayer >= 13);
+        const bool bSecondImpact = (Effect.Cue.Clip == TEXT("Attack62_Impact") && AxeLayer >= 26) ||
+            (Effect.Cue.Clip == TEXT("Attack62_ExImpact") && AxeLayer >= 40);
+        // 同一招的两刀以各自的接触帧为准，不用同一个时移。
+        const int32 LayerFrame = Frame + (bAxeFollowup ? 3 : bSecondImpact ? 4 : 0);
+        if (!Clip.Offsets.IsValidIndex(LayerFrame))
+        {
+            Part->SetVisibility(false);
+            continue;
+        }
+        const bool bWorld = Effect.Cue.Anchor == TEXT("World") || Effect.Cue.Clip == TEXT("Attack31_Weapon") ||
+            Effect.Cue.Clip == TEXT("Attack62_Impact") || Effect.Cue.Clip.EndsWith(TEXT("_ExImpact"));
+        if (Effect.Cue.Anchor == TEXT("DodgeGround") && Effect.MontageId == PlannedMontageId &&
+            (Layer.EndsWith(TEXT("_Chong")) || Layer.EndsWith(TEXT("_Thunder02"))))
+        {
+            Part->SetWorldTransform(GetOrigin(Effect.Cue));
+        }
+        if (Effect.Cue.bActionBound && !bWorld && Layer.StartsWith(TEXT("A1")) && Effect.MontageId == PlannedMontageId)
+        {
+            Part->SetWorldTransform(GetOrigin(Effect.Cue));
+        }
         if (bWorld && !Effect.Planted[L])
         {
             const int32 PlantFrame = WorldPlantFrame(Effect.Cue.Clip, Layer);
-            Part->SetWorldTransform(GetOrigin(Effect.Cue));
-            Effect.Planted[L] = Frame >= PlantFrame;
+            const bool bContinueFighterAnchor = !Layer.StartsWith(TEXT("A6")) || Effect.MontageId == PlannedMontageId;
+            if (bContinueFighterAnchor)
+            {
+                Part->SetWorldTransform(GetOrigin(Effect.Cue));
+            }
+            Effect.Planted[L] = LayerFrame >= PlantFrame;
+            if (Effect.Planted[L] &&
+                (Layer.EndsWith(TEXT("_An")) || Layer.EndsWith(TEXT("_DilieAn"))) &&
+                Layer.StartsWith(TEXT("A6")))
+            {
+                const FVector Center = Part->GetComponentLocation();
+                const FVector Blade = CharacterMesh->GetSocketLocation(WeaponAnchor);
+                UE_LOG(LogNanamiLocalVfx, Display, TEXT("PGR_AXE_PLANT %s %s f=%d base=%s weapon=%s ground=%d yaw=%.1f"),
+                    *Effect.Cue.Clip, *Layer, LayerFrame, *Center.ToCompactString(), *Blade.ToCompactString(),
+                    Effect.Cue.Anchor == TEXT("Ground"), Part->GetComponentRotation().Yaw);
+            }
         }
-        int32 Sample = Frame;
+        int32 Sample = LayerFrame;
         if (Effect.Cue.Clip == TEXT("Attack22") && (Layer == TEXT("L08_Lei01") || Layer == TEXT("L09_Lei02")))
         {
             for (int32 F = Frame; F > Effect.LastFrame && F > Frame - 3; --F)
@@ -442,7 +588,12 @@ void UNanamiLocalVfxComponent::ApplyFrame(FPlayback& Effect, int32 Frame) const
             {TEXT("Attack01"), 10}, {TEXT("Attack02"), 29}, {TEXT("Attack03"), 20}, {TEXT("Attack04"), 53},
             {TEXT("Attack11"), 19}, {TEXT("Attack11_Smoke"), 12}, {TEXT("Attack12"), 7}, {TEXT("Attack12_Impact"), 26},
             {TEXT("Attack21"), 7}, {TEXT("Attack22"), 31}, {TEXT("Attack22_Weapon"), 22},
-            {TEXT("Attack31"), 36}, {TEXT("Attack31_Weapon"), 20}, {TEXT("Attack32"), 4}};
+            {TEXT("Attack31"), 36}, {TEXT("Attack31_Weapon"), 20}, {TEXT("Attack32"), 4}, {TEXT("Attack32_Ci"), 10},
+            {TEXT("Attack61"), 6}, {TEXT("Attack62"), 8}, {TEXT("Attack62_Impact"), 10},
+            {TEXT("Attack63"), 28}, {TEXT("Attack64"), 5},
+            {TEXT("Attack61_Ex"),6},{TEXT("Attack62_Ex"),6},{TEXT("Attack62_ExImpact"),10},
+            {TEXT("Attack63_Ex"),28},{TEXT("Attack64_Ex"),5},{TEXT("Attack64_ExImpact"),10},
+            {TEXT("AttackDodgeMove1"),4},{TEXT("AttackDodgeMove2"),4}};
         const int32* Target = ShotFrames.Find(Effect.Cue.Clip);
         if (Target && Frame >= *Target && Effect.LastFrame < *Target)
         {
@@ -477,6 +628,17 @@ void UNanamiLocalVfxComponent::TickComponent(float DeltaTime, ELevelTick TickTyp
     UAnimInstance* Anim = PlannedAnim.Get();
     const FAnimMontageInstance* Current = Anim ? Anim->GetMontageInstanceForID(PlannedMontageId) : nullptr;
     const bool bLive = Current && Current->IsActive();
+    if (SwordTrailMontage != INDEX_NONE)
+    {
+        if (bLive && Current->GetInstanceID() == SwordTrailMontage)
+        {
+            TickSwordTrail(Current->GetPosition() - PlannedSectionStart);
+        }
+        else
+        {
+            ResetSwordTrail();
+        }
+    }
     for (int32 I = Active.Num() - 1; I >= 0; --I)
     {
         FPlayback& Fx = Active[I];
@@ -488,7 +650,7 @@ void UNanamiLocalVfxComponent::TickComponent(float DeltaTime, ELevelTick TickTyp
             Active.RemoveAtSwap(I);
             continue;
         }
-        if ((Fx.Cue.Anchor == TEXT("Weapon") && Fx.Cue.Clip != TEXT("Attack31_Weapon")) || Fx.Cue.Anchor == TEXT("Root"))
+        if ((Fx.Cue.Anchor == TEXT("Weapon") && Fx.Cue.Clip != TEXT("Attack31_Weapon")) || Fx.Cue.Anchor == TEXT("Root") || Fx.Cue.Anchor == TEXT("Sword03Shield") || Fx.Cue.Anchor == TEXT("Sword03Blade"))
         {
             const FTransform T = GetOrigin(Fx.Cue);
             for (const auto& Part : Fx.Layers)
@@ -498,6 +660,25 @@ void UNanamiLocalVfxComponent::TickComponent(float DeltaTime, ELevelTick TickTyp
                     Part->SetWorldTransform(T);
                 }
             }
+        }
+        if (Fx.Cue.Clip == TEXT("Attack03_SwordCharge") && Frame != Fx.LastFrame && Frame % 5 == 0)
+        {
+            const FTransform T = GetOrigin(Fx.Cue);
+            UE_LOG(LogNanamiLocalVfx, Display, TEXT("PGR_SWORD03_BLADE_CHARGE f=%d center=%s axis=%s"),Frame,
+                *T.GetLocation().ToCompactString(), *T.GetRotation().GetAxisX().ToCompactString());
+        }
+        if (Fx.Cue.Clip == TEXT("Attack03_ShieldGlow") && Frame != Fx.LastFrame && Frame % 6 == 0 && CharacterMesh.IsValid())
+        {
+            const FTransform Halo = GetOrigin(Fx.Cue);
+            const FTransform Shield = CharacterMesh->GetSocketTransform(TEXT("Aegis_WeaponCenter"));
+            const FVector C = Halo.GetLocation();
+            const FVector P = CharacterMesh->GetSocketLocation(TEXT("Aegis_WeaponBone2"));
+            const FVector B = CharacterMesh->GetSocketLocation(WeaponAnchor);
+            UE_LOG(LogNanamiLocalVfx, Display, TEXT("PGR_SWORD03_SHIELD_POSE f=%d center=%s shield=%s grip=%s distance=%.1f faceAlignment=%.4f sx=%s sy=%s sz=%s"), Frame,
+                *C.ToCompactString(), *P.ToCompactString(), *B.ToCompactString(), FVector::Dist(C, B),
+                FVector::DotProduct(Halo.GetRotation().GetAxisZ(), Shield.GetRotation().GetAxisZ()),
+                *Shield.GetRotation().GetAxisX().ToCompactString(), *Shield.GetRotation().GetAxisY().ToCompactString(),
+                *Shield.GetRotation().GetAxisZ().ToCompactString());
         }
         if (Frame != Fx.LastFrame)
         {
@@ -511,6 +692,23 @@ void UNanamiLocalVfxComponent::TickComponent(float DeltaTime, ELevelTick TickTyp
     else
     {
         const float Seconds = Current->GetPosition() - PlannedSectionStart;
+        if (!bYellowHoldExitSeen)
+        {
+            const auto* Motion = GetOwner()->FindComponentByClass<UCombatMotionComponent>();
+            if (Motion && !Motion->GetExitSection().IsNone() &&
+                Motion->GetCurrentActionSection() == Motion->GetExitSection())
+            {
+                bYellowHoldExitSeen = true;
+                Pending.Reset();
+                for (const FCue& Cue : Cues)
+                {
+                    if (Cue.Action == TEXT("YellowHoldExit"))
+                    {
+                        StartCue(Cue, PlannedMontageId, 0.f);
+                    }
+                }
+            }
+        }
         for (int32 I = 0; I < Pending.Num();)
         {
             const FCue& Cue = Cues[Pending[I]];
@@ -527,8 +725,11 @@ void UNanamiLocalVfxComponent::TickComponent(float DeltaTime, ELevelTick TickTyp
             Pending.RemoveAt(I);
         }
     }
-    if (Active.IsEmpty() && Pending.IsEmpty())
+    if (Active.IsEmpty() && Pending.IsEmpty() && SwordTrailMontage == INDEX_NONE)
     {
         SetComponentTickEnabled(false);
     }
 }
+
+
+
