@@ -28,6 +28,13 @@ private:
     // 骨点到模型和武器外沿仍有距离，拟合画面时为这部分留白。
     UPROPERTY(EditInstanceOnly, Category = "Framing", meta = (ClampMin = "0", Units = "cm"))
     float FramingPadding = 45.0f;
+
+    // 闪避时武器扫动引起的构图距离每秒最多变化多少厘米。
+    UPROPERTY(EditDefaultsOnly, Category = "Framing", meta = (ClampMin = "1.0", Units = "cm/s"))
+    float DodgeFramingSpeed = 600.0f;
+
+    double LastPullback = 0.0;
+    bool bSettlingDodgeFraming = false;
 };
 
 UCLASS()

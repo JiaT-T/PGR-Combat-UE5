@@ -44,6 +44,10 @@ public:
     ECombatChainWindow GetUltimateWindow() const;
     // 判断已接收的必杀输入是否经过开窗点。
     bool HasReachedUltimateWindow() const;
+    // 查询当前实例能否接收闪避，含允许的自然淡出区间。
+    ECombatChainWindow GetDodgeWindow() const;
+    // 检查本实例已记住的闪避是否到达起播点。
+    bool HasReachedDodgeWindow() const;
     // 兼容已有的立即续段查询，提前输入区间不视作已经开窗。
     bool IsInputBufferOpen() const { return GetChainWindow() == ECombatChainWindow::Chain; }
     // 判断一次已缓存的输入是否随动画越过了允许切招的起点。
@@ -80,6 +84,8 @@ private:
     FCombatAbilityWindow BasicFollowUpChain;
     FCombatAbilityWindow YellowTapBuffer;
     FCombatAbilityWindow YellowTapChain;
+    FCombatAbilityWindow DodgeBuffer;
+    FCombatAbilityWindow DodgeChain;
     FCombatAbilityWindow UltimateBuffer;
     FCombatAbilityWindow UltimateChain;
     bool bBlendingOutNaturally = false;

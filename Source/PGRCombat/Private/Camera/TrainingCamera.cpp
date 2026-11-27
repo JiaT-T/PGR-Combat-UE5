@@ -1,6 +1,7 @@
 #include "Camera/TrainingCamera.h"
 
 #include "Camera/CameraTypes.h"
+#include "Combat/CombatComponent.h"
 #include "CollisionQueryParams.h"
 #include "CollisionShape.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -39,6 +40,16 @@ void UTrainingCameraComponent::GetCameraView(float DeltaTime, FMinimalViewInfo& 
             Pullback = FMath::Max(Pullback, RequiredDepth - Point.X);
         }
     }
+    const auto* Combat = Character->FindComponentByClass<UCombatComponent>();
+    const bool bDodging = Combat && Combat->IsDodging();
+    if (bDodging || bSettlingDodgeFraming)
+    {
+        // 快速扫过镜头的武器会瞬间撑大取景范围。仅在闪避和它的交接期限制后拉速度。
+        const double Requested = Pullback;
+        Pullback = FMath::FInterpConstantTo(LastPullback, Requested, DeltaTime, DodgeFramingSpeed);
+        bSettlingDodgeFraming = bDodging || !FMath::IsNearlyEqual(Pullback, Requested);
+    }
+    LastPullback = Pullback;
     OutResult.Location -= Orientation.GetForwardVector() * Pullback;
 
     // 构图修正在弹簧臂避障之后发生，最终取景点也要与地面和场景保持相机探针的间距。
