@@ -41,13 +41,13 @@ void UTrainingCameraComponent::GetCameraView(float DeltaTime, FMinimalViewInfo& 
         }
     }
     const auto* Combat = Character->FindComponentByClass<UCombatComponent>();
-    const bool bDodging = Combat && Combat->IsDodging();
-    if (bDodging || bSettlingDodgeFraming)
+    const bool bSmoothFraming = Combat && (Combat->IsDodging() || SmoothedFramingActions.Contains(Combat->GetActiveActionId()));
+    if (bSmoothFraming || bSettlingFraming)
     {
-        // 快速扫过镜头的武器会瞬间撑大取景范围。仅在闪避和它的交接期限制后拉速度。
+        // 限制武器扫过时的镜头推拉，收势被下一招接走时也从当前距离继续跟随。
         const double Requested = Pullback;
         Pullback = FMath::FInterpConstantTo(LastPullback, Requested, DeltaTime, DodgeFramingSpeed);
-        bSettlingDodgeFraming = bDodging || !FMath::IsNearlyEqual(Pullback, Requested);
+        bSettlingFraming = bSmoothFraming || !FMath::IsNearlyEqual(Pullback, Requested);
     }
     LastPullback = Pullback;
     OutResult.Location -= Orientation.GetForwardVector() * Pullback;
