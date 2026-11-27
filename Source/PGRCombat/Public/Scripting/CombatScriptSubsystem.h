@@ -12,8 +12,8 @@ namespace puerts
 class UCombatComponent;
 class UNanamiOrbComponent;
 
-DECLARE_DYNAMIC_DELEGATE_RetVal_ThreeParams(
-    FName, FResolveCombatAction, UCombatComponent*, Combat, const FString&, Command, const FString&, Phase);
+DECLARE_DYNAMIC_DELEGATE_RetVal_FourParams(
+    FName, FResolveCombatAction, UCombatComponent*, Combat, const FString&, Command, const FString&, Phase, bool, bDirectional);
 
 DECLARE_DYNAMIC_DELEGATE_ThreeParams(
     FNanamiOrbActionStarted, UNanamiOrbComponent*, Orbs, FName, ActionId, int64, InstanceId);
@@ -30,7 +30,7 @@ public:
     virtual void Deinitialize() override;
 
     // 查询本次输入对应的动作，未选中时返回空标识。
-    FName ResolveAction(UCombatComponent* Combat, ECombatCommand Command, ECombatInputPhase Phase) const;
+    FName ResolveAction(UCombatComponent* Combat, ECombatCommand Command, ECombatInputPhase Phase, bool bDirectional = false) const;
 
     UPROPERTY()
     FResolveCombatAction ActionResolver;

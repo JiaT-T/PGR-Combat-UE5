@@ -106,6 +106,8 @@ bool UCombatMotionComponent::PlayAction(FName ActionId, ECombatCommand Command, 
     BasicFollowUpChain = Tasks.BasicFollowUpChain;
     YellowTapBuffer = Tasks.YellowTapBuffer;
     YellowTapChain = Tasks.YellowTapChain;
+    DodgeBuffer = Tasks.DodgeBuffer;
+    DodgeChain = Tasks.DodgeChain;
     UltimateBuffer = Tasks.UltimateBuffer;
     UltimateChain = Tasks.UltimateChain;
     if (PreviousAnimInstance)
@@ -140,6 +142,19 @@ bool UCombatMotionComponent::IsMoveCancelWindowOpen() const
 ECombatChainWindow UCombatMotionComponent::GetBasicFollowUpWindow() const
 {
     return ReadChainWindow(GetPlayingInstance(true), BasicFollowUpBuffer, BasicFollowUpChain);
+}
+
+// 新闪避使用来源 Ability 的窗口，按停止的旧实例不能重获资格。
+ECombatChainWindow UCombatMotionComponent::GetDodgeWindow() const
+{
+    return ReadChainWindow(GetPlayingInstance(true), DodgeBuffer, DodgeChain);
+}
+
+// 允许已缓存的闪避在动画实际经过开窗点时起播。
+bool UCombatMotionComponent::HasReachedDodgeWindow() const
+{
+    const FAnimMontageInstance* Instance = GetPlayingInstance(true);
+    return Instance && DodgeChain.StartSeconds < DodgeChain.EndSeconds && Instance->GetPosition() >= DodgeChain.StartSeconds;
 }
 
 // 按本次 Montage 的实际游标判断必杀窗口，也支持跳入焚冲收势段。
@@ -222,6 +237,8 @@ void UCombatMotionComponent::StopAction(float BlendOutSeconds)
     BasicFollowUpChain = {};
     YellowTapBuffer = {};
     YellowTapChain = {};
+    DodgeBuffer = {};
+    DodgeChain = {};
     UltimateBuffer = {};
     UltimateChain = {};
     bBlendingOutNaturally = false;

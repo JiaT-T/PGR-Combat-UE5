@@ -5,7 +5,7 @@ import { NanamiOrbComponent, onOrbStarted } from "../Combat/Nanami/SignalOrb.js"
 interface CombatScriptHost {
     ActionResolver: {
         // 注册供原生战斗组件调用的选招回调。
-        Bind(callback: (combat: CombatComponent, command: string, phase: string) => string): void;
+        Bind(callback: (combat: CombatComponent, command: string, phase: string, directional: boolean) => string): void;
     };
     NanamiOrbActionStarted: {
         // 注册七实动作确认起播后的资源结算。

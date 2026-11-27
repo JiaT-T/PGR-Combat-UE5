@@ -9,6 +9,7 @@
 #include "Engine/LocalPlayer.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
+#include "EnhancedPlayerInput.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/SpringArmComponent.h"
@@ -47,6 +48,11 @@ void APGRCombatCharacter::PostInitializeComponents()
     }
     Motion->ActionSet = ActionSet;
     SetAnimRootMotionTranslationScale(FighterRootMotionTranslationScale);
+
+    if (DodgeAction)
+    {
+        GetCharacterMovement()->ProcessRootMotionPostConvertToWorld.BindUObject(this, &ThisClass::OrientDodgeRootMotion);
+    }
 
     if (MoveAction)
     {
@@ -150,6 +156,10 @@ void APGRCombatCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInput
             Input->BindAction(YellowOrbAction, ETriggerEvent::Canceled, Form, &UNanamiFormComponent::CancelYellow);
         }
     }
+    if (Input && DodgeAction)
+    {
+        Input->BindAction(DodgeAction, ETriggerEvent::Started, this, &ThisClass::OnDodgePressed);
+    }
     // 同帧的出招与松键确认先于持续方向输入处理。
     if (Input && MoveAction)
     {
@@ -167,8 +177,42 @@ void APGRCombatCharacter::OnMove(const FInputActionValue& Value)
         return;
     }
 
+    AddMovementInput(GetWorldMoveDirection(Axis));
+}
+
+// 使用控制器的水平朝向解释方向轴，保留摇杆的输入幅度。
+FVector APGRCombatCharacter::GetWorldMoveDirection(FVector2D Axis) const
+{
     const FRotator ViewYaw(0.0, GetControlRotation().Yaw, 0.0);
-    AddMovementInput(ViewYaw.RotateVector(FVector(Axis.Y, Axis.X, 0.0)));
+    return ViewYaw.RotateVector(FVector(Axis.Y, Axis.X, 0.0));
+}
+
+// Enhanced Input 在派发回调前已计算这帧的方向，方向键和闪避键可以同帧按下。
+void APGRCombatCharacter::OnDodgePressed()
+{
+    const APlayerController* Player = Cast<APlayerController>(Controller);
+    const UEnhancedPlayerInput* Input = Player ? Cast<UEnhancedPlayerInput>(Player->PlayerInput) : nullptr;
+    const FVector2D Axis = Input && MoveAction ? Input->GetActionValue(MoveAction).Get<FVector2D>() : FVector2D::ZeroVector;
+    Combat->SubmitInput(ECombatCommand::Dodge, ECombatInputPhase::Pressed, GetWorldMoveDirection(Axis));
+}
+
+// 位移全量朝按键方向投射，只给角色本帧允许的转角。两者仍由角色移动组件执行。
+FTransform APGRCombatCharacter::OrientDodgeRootMotion(const FTransform& WorldMotion, UCharacterMovementComponent* Movement,
+    float DeltaSeconds)
+{
+    const FVector& Direction = Combat->GetActiveDodgeDirection();
+    if (Direction.IsNearlyZero())
+    {
+        return WorldMotion;
+    }
+
+    const double RemainingYaw = FMath::FindDeltaAngleDegrees(GetActorRotation().Yaw, Direction.Rotation().Yaw);
+    const double MaxTurn = Movement->GetDeltaRotation(DeltaSeconds).Yaw;
+    const double StepYaw = FMath::Clamp(RemainingYaw, -MaxTurn, MaxTurn);
+    FTransform Result = WorldMotion;
+    Result.SetTranslation(FRotator(0.0, RemainingYaw, 0.0).RotateVector(WorldMotion.GetTranslation()));
+    Result.SetRotation(FRotator(0.0, StepYaw, 0.0).Quaternion() * WorldMotion.GetRotation());
+    return Result;
 }
 
 // 仅在常态移动交给动作时清一次本帧输入和水平惯性，连段保留原有根运动衔接。

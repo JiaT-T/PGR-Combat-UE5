@@ -37,7 +37,7 @@ void UCombatScriptSubsystem::ConfirmStartup()
 }
 
 // 将输入指令和按键阶段转换为枚举名称，交给脚本解析为动作标识。
-FName UCombatScriptSubsystem::ResolveAction(UCombatComponent* Combat, ECombatCommand Command, ECombatInputPhase Phase) const
+FName UCombatScriptSubsystem::ResolveAction(UCombatComponent* Combat, ECombatCommand Command, ECombatInputPhase Phase, bool bDirectional) const
 {
     if (!bScriptReady || !ActionResolver.IsBound())
     {
@@ -47,7 +47,7 @@ FName UCombatScriptSubsystem::ResolveAction(UCombatComponent* Combat, ECombatCom
     // 传枚举名，避免 TS 手写的数值顺序与 UE 枚举脱节。
     const FString CommandName = StaticEnum<ECombatCommand>()->GetNameStringByValue(static_cast<int64>(Command));
     const FString PhaseName = StaticEnum<ECombatInputPhase>()->GetNameStringByValue(static_cast<int64>(Phase));
-    return ActionResolver.Execute(Combat, CommandName, PhaseName);
+    return ActionResolver.Execute(Combat, CommandName, PhaseName, bDirectional);
 }
 
 // 解除选招回调并释放当前游戏实例的脚本运行环境。

@@ -19,6 +19,34 @@ namespace
         OutWindow = { Task->StartSeconds, Task->EndSeconds };
         return true;
     }
+
+    // 将段内的衔接窗换算为 Montage 游标，并把缓存限制在本段入口之后。
+    bool ReadSectionWindow(const UCombatWindowTask& Task, FName Section, float LeadSeconds,
+        const FCombatMontageTasks& Playback, float EndPosition, FCombatAbilityWindow& Buffer, FCombatAbilityWindow& Chain)
+    {
+        float Origin = 0.f;
+        float Limit = EndPosition;
+        if (!Section.IsNone())
+        {
+            const int32 Index = Playback.Montage->GetSectionIndex(Section);
+            if (Index == INDEX_NONE)
+            {
+                return false;
+            }
+            Playback.Montage->GetSectionStartAndEndTime(Index, Origin, Limit);
+        }
+        FCombatAbilityWindow LocalWindow;
+        if (!FMath::IsFinite(LeadSeconds) || LeadSeconds < 0.f
+            || !ReadWindow(&Task, FMath::Max(0.f, Playback.StartPosition - Origin),
+                           FMath::Min(Limit, EndPosition) - Origin, LocalWindow))
+        {
+            return false;
+        }
+        const float Start = Origin + LocalWindow.StartSeconds;
+        Chain = { Start, Origin + LocalWindow.EndSeconds };
+        Buffer = { FMath::Max(FMath::Max(Origin, Playback.StartPosition), Start - LeadSeconds), Start };
+        return true;
+    }
 }
 
 // 允许设计者增删和重排 Task；重复、空项或越界配置在替换旧动作之前被拒绝。
@@ -30,6 +58,7 @@ bool UCombatMontageAbility::ResolveTasks(FCombatMontageTasks& OutTasks) const
     const UCombatBasicFollowUpTask* Basic = nullptr;
     const UCombatYellowTapWindowTask* YellowTap = nullptr;
     const UCombatUltimateWindowTask* Ultimate = nullptr;
+    const UCombatDodgeWindowTask* Dodge = nullptr;
     FCombatMontageTasks Resolved;
     Resolved.bRequireFullPlayback = bRequireFullPlayback;
     for (const UCombatAbilityTask* Task : Tasks)
@@ -86,6 +115,14 @@ bool UCombatMontageAbility::ResolveTasks(FCombatMontageTasks& OutTasks) const
                 return false;
             }
             YellowTap = TapWindow;
+        }
+        else if (const auto* DodgeWindow = Cast<UCombatDodgeWindowTask>(Task))
+        {
+            if (Dodge)
+            {
+                return false;
+            }
+            Dodge = DodgeWindow;
         }
         else if (const auto* InterruptWindow = Cast<UCombatUltimateWindowTask>(Task))
         {
@@ -152,29 +189,24 @@ bool UCombatMontageAbility::ResolveTasks(FCombatMontageTasks& OutTasks) const
         Resolved.BasicFollowUpBuffer = { Basic->BufferStartSeconds, Basic->ChainStartSeconds };
         Resolved.BasicFollowUpChain = { Basic->ChainStartSeconds, Basic->EndSeconds };
     }
-    if (Ultimate)
+    if (Ultimate && !ReadSectionWindow(*Ultimate, Ultimate->RelativeToSection, Ultimate->BufferLeadSeconds,
+                                       Resolved, EndPosition, Resolved.UltimateBuffer, Resolved.UltimateChain))
     {
-        float Origin = 0.f;
-        float Limit = EndPosition;
-        if (!Ultimate->RelativeToSection.IsNone())
-        {
-            const int32 Index = Resolved.Montage->GetSectionIndex(Ultimate->RelativeToSection);
-            if (Index == INDEX_NONE)
-            {
-                return false;
-            }
-            Resolved.Montage->GetSectionStartAndEndTime(Index, Origin, Limit);
-        }
-        FCombatAbilityWindow LocalWindow;
-        if (!FMath::IsFinite(Ultimate->BufferLeadSeconds) || Ultimate->BufferLeadSeconds < 0.f
-            || !ReadWindow(Ultimate, FMath::Max(0.f, Resolved.StartPosition - Origin),
-                           FMath::Min(Limit, EndPosition) - Origin, LocalWindow))
+        return false;
+    }
+    if (Dodge)
+    {
+        if (!ReadSectionWindow(*Dodge, Dodge->RelativeToSection, Dodge->BufferLeadSeconds,
+                               Resolved, EndPosition, Resolved.DodgeBuffer, Resolved.DodgeChain))
         {
             return false;
         }
-        const float Start = Origin + LocalWindow.StartSeconds;
-        Resolved.UltimateChain = { Start, Origin + LocalWindow.EndSeconds };
-        Resolved.UltimateBuffer = { FMath::Max(FMath::Max(Origin, Resolved.StartPosition), Start - Ultimate->BufferLeadSeconds), Start };
+    }
+    else if (!bRequireFullPlayback)
+    {
+        // 普通输入沿用此招的通用接招窗；锁定招式必须在自己的 Ability 中授权闪避。
+        Resolved.DodgeBuffer = Resolved.InputBuffer;
+        Resolved.DodgeChain = Resolved.ChainWindow;
     }
     OutTasks = Resolved;
     return true;

@@ -49,7 +49,7 @@ void UCombatComponent::EndPlay(const EEndPlayReason::Type Reason)
 }
 
 // 按脚本选招，同类动作检查接续窗口，跨指令输入交给打断规则。
-ECombatInputResult UCombatComponent::SubmitInput(ECombatCommand Command, ECombatInputPhase Phase)
+ECombatInputResult UCombatComponent::SubmitInput(ECombatCommand Command, ECombatInputPhase Phase, FVector WorldDirection)
 {
     UGameInstance* Game = GetWorld() ? GetWorld()->GetGameInstance() : nullptr;
     UCombatScriptSubsystem* Scripts = Game ? Game->GetSubsystem<UCombatScriptSubsystem>() : nullptr;
@@ -79,6 +79,15 @@ ECombatInputResult UCombatComponent::SubmitInput(ECombatCommand Command, ECombat
     if (BufferedCommand == ECombatCommand::Ultimate && !BufferedActionId.IsNone())
     {
         return ECombatInputResult::Rejected;
+    }
+    if (Command == ECombatCommand::Dodge)
+    {
+        if (Phase != ECombatInputPhase::Pressed || WorldDirection.ContainsNaN())
+        {
+            return ECombatInputResult::Ignored;
+        }
+        const FVector Direction = WorldDirection.GetSafeNormal2D();
+        return SubmitDodge(Scripts->ResolveAction(this, Command, Phase, !Direction.IsNearlyZero()), Direction);
     }
     const bool bLocked = IsActionLocked();
     const bool bBasicTap = Command == ECombatCommand::BasicAttack
@@ -114,7 +123,8 @@ ECombatInputResult UCombatComponent::SubmitInput(ECombatCommand Command, ECombat
 
     if (ActiveInstanceId != 0)
     {
-        if (Command == ECombatCommand::BasicAttack && Phase == ECombatInputPhase::Held)
+        const bool bHeavy = Command == ECombatCommand::BasicAttack && Phase == ECombatInputPhase::Held;
+        if (bHeavy && ActiveCommand != ECombatCommand::Dodge)
         {
             if (ActiveCommand == Command && Motion->IsInputBufferOpen())
             {
@@ -126,12 +136,13 @@ ECombatInputResult UCombatComponent::SubmitInput(ECombatCommand Command, ECombat
         // 黄球在松手或长按成立时才选出动作，两者都按一次发动意图处理。
         const bool bYellowActivation = Command == ECombatCommand::YellowOrb
             && (Phase == ECombatInputPhase::Held || Phase == ECombatInputPhase::Released);
-        const bool bActivation = Phase == ECombatInputPhase::Pressed || bYellowActivation;
+        const bool bActivation = Phase == ECombatInputPhase::Pressed || bYellowActivation || bHeavy;
         if (bActivation && ActiveCommand == ECombatCommand::BasicAttack && Command != ActiveCommand)
         {
             return TryInterruptBasicAttack(Command, ActionId);
         }
-        const bool bCanChain = bBasicFollowUp || Command == ActiveCommand || (IsSignalOrb(Command) && IsSignalOrb(ActiveCommand));
+        const bool bCanChain = bBasicFollowUp || Command == ActiveCommand || ActiveCommand == ECombatCommand::Dodge
+            || (IsSignalOrb(Command) && IsSignalOrb(ActiveCommand));
         const ECombatChainWindow Window = bBasicFollowUp ? Motion->GetBasicFollowUpWindow()
             : Motion->GetChainWindow(IsYellowTap(Command, Phase));
         if (!bActivation || !bCanChain || Window == ECombatChainWindow::Closed)
@@ -217,11 +228,13 @@ void UCombatComponent::ResetBasicPress()
 }
 
 // 只需要等衔接窗口时才轮询；必须等结束的输入由 Montage 自然结束回调消费。
-ECombatInputResult UCombatComponent::BufferInput(ECombatCommand Command, ECombatInputPhase Phase, FName ActionId, bool bWaitForWindow)
+ECombatInputResult UCombatComponent::BufferInput(ECombatCommand Command, ECombatInputPhase Phase, FName ActionId,
+    bool bWaitForWindow, const FVector& Direction)
 {
     BufferedCommand = Command;
     BufferedPhase = Phase;
     BufferedActionId = ActionId;
+    BufferedDirection = Direction;
     SetComponentTickEnabled(bWaitForWindow);
     return ECombatInputResult::Buffered;
 }
@@ -281,8 +294,32 @@ ECombatInputResult UCombatComponent::SubmitUltimate(FName ActionId)
     return ECombatInputResult::Rejected;
 }
 
+// 接受待机闪避，或在当前动作的窗口内暂存或启动一次闪避。
+ECombatInputResult UCombatComponent::SubmitDodge(FName ActionId, const FVector& Direction)
+{
+    if (ActionId.IsNone())
+    {
+        return ECombatInputResult::Ignored;
+    }
+    if (ActiveInstanceId != 0)
+    {
+        switch (Motion->GetDodgeWindow())
+        {
+        case ECombatChainWindow::Buffer:
+            return BufferInput(ECombatCommand::Dodge, ECombatInputPhase::Pressed, ActionId, true, Direction);
+        case ECombatChainWindow::Closed:
+            NotifyAction(ActionId, 0, ECombatActionEvent::Rejected);
+            return ECombatInputResult::Rejected;
+        default:
+            break;
+        }
+    }
+    return StartAction(ECombatCommand::Dodge, ActionId, ECombatActionEvent::Chained, Direction);
+}
+
 // 先尝试起播，再更新当前实例并通知被替换的动作。
-ECombatInputResult UCombatComponent::StartAction(ECombatCommand Command, FName ActionId, ECombatActionEvent PreviousEvent)
+ECombatInputResult UCombatComponent::StartAction(ECombatCommand Command, FName ActionId, ECombatActionEvent PreviousEvent,
+    const FVector& Direction)
 {
     const int64 PreviousInstanceId = ActiveInstanceId;
     const FName PreviousActionId = ActiveActionId;
@@ -309,6 +346,7 @@ ECombatInputResult UCombatComponent::StartAction(ECombatCommand Command, FName A
     ActiveInstanceId = InstanceId;
     ActiveActionId = ActionId;
     ActiveCommand = Command;
+    ActiveDodgeDirection = Command == ECombatCommand::Dodge ? Direction : FVector::ZeroVector;
     if (PreviousInstanceId != 0)
     {
         NotifyAction(PreviousActionId, PreviousInstanceId, PreviousEvent);
@@ -326,6 +364,14 @@ ECombatInputResult UCombatComponent::StartAction(ECombatCommand Command, FName A
 void UCombatComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* TickFunction)
 {
     Super::TickComponent(DeltaTime, TickType, TickFunction);
+    if (BufferedCommand == ECombatCommand::Dodge)
+    {
+        if (Motion && Motion->HasReachedDodgeWindow())
+        {
+            ConsumeBufferedInput(ECombatActionEvent::Chained);
+        }
+        return;
+    }
     if (BufferedCommand == ECombatCommand::Ultimate)
     {
         if (Motion && Motion->HasReachedUltimateWindow())
@@ -353,22 +399,24 @@ bool UCombatComponent::ConsumeBufferedInput(ECombatActionEvent PreviousEvent)
     const FName ActionId = BufferedActionId;
     const ECombatCommand Command = BufferedCommand;
     const ECombatInputPhase Phase = BufferedPhase;
+    const FVector Direction = BufferedDirection;
     ClearBufferedInput();
     UGameInstance* Game = GetWorld() ? GetWorld()->GetGameInstance() : nullptr;
     UCombatScriptSubsystem* Scripts = Game ? Game->GetSubsystem<UCombatScriptSubsystem>() : nullptr;
-    const FName CurrentAction = Scripts ? Scripts->ResolveAction(this, Command, Phase) : NAME_None;
+    const FName CurrentAction = Scripts ? Scripts->ResolveAction(this, Command, Phase, !Direction.IsNearlyZero()) : NAME_None;
     // 必杀缓存的是按键；焚冲分离或切形之后，以真正起播时的武器选择分支。
     if (CurrentAction.IsNone() || (Command != ECombatCommand::Ultimate && CurrentAction != ActionId))
     {
         return false;
     }
-    return StartAction(Command, CurrentAction, PreviousEvent) == ECombatInputResult::Started;
+    return StartAction(Command, CurrentAction, PreviousEvent, Direction) == ECombatInputResult::Started;
 }
 
 // 起播新招、取消输入或结束实例时撤销旧招的缓冲。
 void UCombatComponent::ClearBufferedInput()
 {
     BufferedActionId = NAME_None;
+    BufferedDirection = FVector::ZeroVector;
     SetComponentTickEnabled(false);
 }
 
@@ -431,6 +479,7 @@ void UCombatComponent::FinishAction(int64 InstanceId, ECombatActionEvent Event)
     ClearBufferedInput();
     ActiveActionId = NAME_None;
     ActiveInstanceId = 0;
+    ActiveDodgeDirection = FVector::ZeroVector;
     NotifyAction(ActionId, InstanceId, Event);
 }
 
