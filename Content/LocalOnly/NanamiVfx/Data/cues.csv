@@ -1,0 +1,14 @@
+Attack01,Attack01,0.07,World,0,0,0,1,World
+Attack02,Attack02,0.06,World,0,0,0,1,World
+Attack03,Attack03,0.04,World,0,0,0,1,World
+Attack04,Attack04,0.21,World,0,0,0,1,World
+Attack11,Attack11_Smoke,0.08,Ground,0,0,0,1,World
+Attack11,Attack11,0.22,World,0,0,0,1,World
+Attack12,Attack12,0.34,Root,0,0,-8,0.7,Action
+Attack12,Attack12_Impact,0.46,Ground,0,0,0,0.9,World
+Attack21,Attack21,0.03,World,0,0,0,1,World
+Attack22,Attack22,0.03,World,0,0,0,1,World
+Attack22,Attack22_Weapon,0.1,Weapon,0,0,0,1,Action
+YellowSwordToAxe,Attack31,0.12,World,0,0,0,1,World
+YellowSwordToAxe,Attack31_Weapon,0.05,Weapon,0,0,0,1,World
+YellowAxeToSword,Attack32,0.24,World,0,0,55,1,World
