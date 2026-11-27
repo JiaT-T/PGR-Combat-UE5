@@ -7,6 +7,6 @@ public class PGRCombat : ModuleRules
     {
         PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
         PublicDependencyModuleNames.AddRange(new[] { "Core", "CoreUObject", "Engine", "UMG" });
-        PrivateDependencyModuleNames.AddRange(new[] { "EnhancedInput", "InputCore", "ScriptEnv", "PapiQuickjs", "PhysicsCore" });
+        PrivateDependencyModuleNames.AddRange(new[] { "EnhancedInput", "InputCore", "ScriptEnv", "PapiQuickjs", "PhysicsCore", "NiagaraAnimNotifies", "ProceduralMeshComponent" });
     }
 }

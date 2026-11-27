@@ -1,4 +1,5 @@
 #include "Motion/CombatMotionComponent.h"
+#include "NanamiLocalVfxComponent.h"
 
 #include "Animation/AnimInstance.h"
 #include "Combat/NanamiFormComponent.h"
@@ -88,6 +89,7 @@ bool UCombatMotionComponent::PlayAction(FName ActionId, ECombatCommand Command, 
     const int32 PreviousInstanceId = MontageInstanceId;
     PlayingAnimInstance = AnimInstance;
     MontageInstanceId = Instance->GetInstanceID();
+    UNanamiLocalVfxComponent::TrackMontage(*Character->GetMesh(), *AnimInstance, *Montage, ActionId, MontageInstanceId, Tasks.StartPosition);
     bBlendingOutNaturally = false;
     // UE 在自然淡出开始时就把实例标为非活动，此时收势窗口仍可能接受普攻。
     Instance->OnMontageBlendingOutStarted.BindWeakLambda(this, [this, Id = MontageInstanceId](UAnimMontage*, bool bInterrupted)
