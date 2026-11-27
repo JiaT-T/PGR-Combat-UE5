@@ -3,11 +3,14 @@
 #include "Combat/CombatComponent.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
+#include "GameFramework/GameModeBase.h"
+#include "GameFramework/GameStateBase.h"
 #include "Motion/CombatMotionComponent.h"
 #include "TimerManager.h"
 
 namespace
 {
+    constexpr float RequiredStarlight = 50.f;
     const FName SwordToAxe(TEXT("YellowSwordToAxe"));
     const FName AxeToSword(TEXT("YellowAxeToSword"));
     const FName YellowHold(TEXT("YellowHold"));
@@ -45,11 +48,25 @@ void UNanamiFormComponent::EndPlay(const EEndPlayReason::Type Reason)
     Super::EndPlay(Reason);
 }
 
+// 达到门槛即可点黄切盾斧，星芒不足时仅允许在配置的训练模式中练习切形。
+bool UNanamiFormComponent::HasStarlightForSwordToAxe() const
+{
+    if (Starlight >= RequiredStarlight)
+    {
+        return true;
+    }
+
+    const UWorld* World = GetWorld();
+    const AGameStateBase* GameState = World ? World->GetGameState() : nullptr;
+    const UClass* TrainingMode = StarlightFreeTapTrainingMode.Get();
+    return TrainingMode && GameState && GameState->GameModeClass.Get() == TrainingMode;
+}
+
 // 剑盾首次发动需要五十星芒；上一轮留下的余量仅可用于重新按下后发动。
 bool UNanamiFormComponent::CanStartYellowHold() const
 {
     return WeaponForm == ENanamiWeaponForm::SwordShield
-        && (Starlight >= 50.f || (bCanSpendRemainder && Starlight > 0.f));
+        && (Starlight >= RequiredStarlight || (bCanSpendRemainder && Starlight > 0.f));
 }
 
 // 红蓝二段和之后的资源来源共用同一份星芒存量。
