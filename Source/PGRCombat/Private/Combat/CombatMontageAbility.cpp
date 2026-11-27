@@ -201,6 +201,18 @@ bool UCombatMontageAbility::ResolveTasks(FCombatMontageTasks& OutTasks) const
         {
             return false;
         }
+        if (Dodge->PairRestartSeconds != 0.f)
+        {
+            if (Command != ECombatCommand::Dodge || !(Dodge->StartSeconds < Dodge->PairRestartSeconds
+                && Dodge->PairRestartSeconds < Dodge->EndSeconds))
+            {
+                return false;
+            }
+            // 两个窗口从同一段入口计时。下一组也只在开窗前的一小段接受提前按键。
+            const float Restart = Resolved.DodgeChain.StartSeconds + (Dodge->PairRestartSeconds - Dodge->StartSeconds);
+            const float BufferStart = FMath::Max(Resolved.DodgeBuffer.StartSeconds, Restart - Dodge->BufferLeadSeconds);
+            Resolved.DodgePairRestartBuffer = { BufferStart, Restart };
+        }
     }
     else if (!bRequireFullPlayback)
     {

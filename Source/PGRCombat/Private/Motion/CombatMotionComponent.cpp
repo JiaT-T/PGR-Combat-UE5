@@ -25,18 +25,18 @@ namespace
 
     // 按当前播放位置区分提前按下和即按即切，关窗后的新按键直接忽略。
     ECombatChainWindow ReadChainWindow(const FAnimMontageInstance* Instance,
-        const FCombatAbilityWindow& Buffer, const FCombatAbilityWindow& Chain)
+        const FCombatAbilityWindow& Buffer, const FCombatAbilityWindow& Chain, float StartTolerance = 0.f)
     {
         if (!Instance)
         {
             return ECombatChainWindow::Closed;
         }
         const float Position = Instance->GetPosition();
-        if (Chain.Contains(Position))
+        if (Chain.Contains(Position, StartTolerance))
         {
             return ECombatChainWindow::Chain;
         }
-        if (Position < Chain.StartSeconds && Buffer.Contains(Position))
+        if (Position < Chain.StartSeconds && Buffer.Contains(Position, StartTolerance))
         {
             return ECombatChainWindow::Buffer;
         }
@@ -64,6 +64,8 @@ bool UCombatMotionComponent::PlayAction(FName ActionId, ECombatCommand Command, 
         return false;
     }
 
+    // 重播同一个 Montage 也会替换旧实例，先从旧游标判定组次，成功起播后再应用。
+    const bool bSecondDodge = Tasks.DodgePairRestartBuffer.EndSeconds > 0.f && CanChainSecondDodge();
     UAnimMontage* Montage = Tasks.Montage;
     if (AnimInstance->Montage_Play(Montage, Tasks.PlayRate, EMontagePlayReturnType::MontageLength, Tasks.StartPosition, false) <= 0.0f)
     {
@@ -108,6 +110,13 @@ bool UCombatMotionComponent::PlayAction(FName ActionId, ECombatCommand Command, 
     YellowTapChain = Tasks.YellowTapChain;
     DodgeBuffer = Tasks.DodgeBuffer;
     DodgeChain = Tasks.DodgeChain;
+    DodgePairRestartPosition = Tasks.DodgePairRestartBuffer.EndSeconds;
+    if (bSecondDodge)
+    {
+        // 第二闪只接受重开窗口；下次成功起闪将按新一组的第一闪处理。
+        DodgeBuffer = Tasks.DodgePairRestartBuffer;
+        DodgeChain.StartSeconds = DodgePairRestartPosition;
+    }
     UltimateBuffer = Tasks.UltimateBuffer;
     UltimateChain = Tasks.UltimateChain;
     if (PreviousAnimInstance)
@@ -147,14 +156,27 @@ ECombatChainWindow UCombatMotionComponent::GetBasicFollowUpWindow() const
 // 新闪避使用来源 Ability 的窗口，按停止的旧实例不能重获资格。
 ECombatChainWindow UCombatMotionComponent::GetDodgeWindow() const
 {
-    return ReadChainWindow(GetPlayingInstance(true), DodgeBuffer, DodgeChain);
+    return ReadChainWindow(GetPlayingInstance(true), DodgeBuffer, DodgeChain, GetDodgeWindowTolerance());
+}
+
+// 判定上一闪是否仍允许组内快接，跨过重开点的独立按键会开启新的一组。
+bool UCombatMotionComponent::CanChainSecondDodge() const
+{
+    if (DodgeChain.StartSeconds >= DodgePairRestartPosition)
+    {
+        return false;
+    }
+    const FAnimMontageInstance* Instance = GetPlayingInstance(true);
+    return Instance && DodgeChain.Contains(Instance->GetPosition(), UE_KINDA_SMALL_NUMBER)
+        && Instance->GetPosition() < DodgePairRestartPosition - UE_KINDA_SMALL_NUMBER;
 }
 
 // 允许已缓存的闪避在动画实际经过开窗点时起播。
 bool UCombatMotionComponent::HasReachedDodgeWindow() const
 {
     const FAnimMontageInstance* Instance = GetPlayingInstance(true);
-    return Instance && DodgeChain.StartSeconds < DodgeChain.EndSeconds && Instance->GetPosition() >= DodgeChain.StartSeconds;
+    return Instance && DodgeChain.StartSeconds < DodgeChain.EndSeconds
+        && Instance->GetPosition() + GetDodgeWindowTolerance() >= DodgeChain.StartSeconds;
 }
 
 // 按本次 Montage 的实际游标判断必杀窗口，也支持跳入焚冲收势段。
@@ -239,6 +261,7 @@ void UCombatMotionComponent::StopAction(float BlendOutSeconds)
     YellowTapChain = {};
     DodgeBuffer = {};
     DodgeChain = {};
+    DodgePairRestartPosition = 0.f;
     UltimateBuffer = {};
     UltimateChain = {};
     bBlendingOutNaturally = false;

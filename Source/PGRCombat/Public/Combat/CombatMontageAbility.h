@@ -89,6 +89,10 @@ public:
 
     UPROPERTY(EditAnywhere, Category = "Task", meta = (ClampMin = "0", Units = "s"))
     float BufferLeadSeconds = 0.f;
+
+    // 仅闪避招式使用。从第二闪起手算起，到此时可以开始下一组；零表示不区分组次。
+    UPROPERTY(EditAnywhere, Category = "Task", meta = (ClampMin = "0", Units = "s"))
+    float PairRestartSeconds = 0.f;
 };
 
 // 为本招单独指定允许交还移动控制的时间。
@@ -143,10 +147,10 @@ struct FCombatAbilityWindow
     float StartSeconds = 0.f;
     float EndSeconds = 0.f;
 
-    // 检查窗口是否已启用并包含给定的本地播放位置。
-    bool Contains(float Position) const
+    // 检查播放游标是否位于窗口内，起点可按需容纳逐帧累加的浮点误差。
+    bool Contains(float Position, float StartTolerance = 0.f) const
     {
-        return StartSeconds < EndSeconds && Position >= StartSeconds && Position <= EndSeconds;
+        return StartSeconds < EndSeconds && Position + StartTolerance >= StartSeconds && Position <= EndSeconds;
     }
 };
 
@@ -169,6 +173,7 @@ struct FCombatMontageTasks
     FCombatAbilityWindow YellowTapChain;
     FCombatAbilityWindow DodgeBuffer;
     FCombatAbilityWindow DodgeChain;
+    FCombatAbilityWindow DodgePairRestartBuffer;
     FCombatAbilityWindow UltimateBuffer;
     FCombatAbilityWindow UltimateChain;
 };

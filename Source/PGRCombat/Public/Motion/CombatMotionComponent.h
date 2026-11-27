@@ -70,6 +70,10 @@ public:
 private:
     // 按实例 ID 取当前播放，收势窗口也可以读取该实例自然淡出时的播放位置。
     FAnimMontageInstance* GetPlayingInstance(bool bIncludeNaturalBlendOut = false) const;
+    // 只有第一闪处于快速衔接区间时，再次起闪才属于同一组的第二闪。
+    bool CanChainSecondDodge() const;
+    // 成组闪避的精确帧边界允许微小浮点误差，避免多等一帧。
+    float GetDodgeWindowTolerance() const { return DodgePairRestartPosition > 0.f ? UE_KINDA_SMALL_NUMBER : 0.f; }
     // 只有短黄输入且本招配置了专用窗时，才覆盖通用技能球窗口。
     bool UsesYellowTapWindow(bool bYellowTap) const { return bYellowTap && YellowTapChain.StartSeconds < YellowTapChain.EndSeconds; }
     TWeakObjectPtr<UAnimInstance> PlayingAnimInstance;
@@ -86,6 +90,7 @@ private:
     FCombatAbilityWindow YellowTapChain;
     FCombatAbilityWindow DodgeBuffer;
     FCombatAbilityWindow DodgeChain;
+    float DodgePairRestartPosition = 0.f;
     FCombatAbilityWindow UltimateBuffer;
     FCombatAbilityWindow UltimateChain;
     bool bBlendingOutNaturally = false;
