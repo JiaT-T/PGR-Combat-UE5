@@ -40,13 +40,13 @@ const blueOrb = {
 
 const signalOrbs = [redOrb, blueOrb] as const;
 
-// 按输入颜色及该色独立的二段资格选招。库存为零时连一段也不能发动。
+// 同色二段需要资格和至少一颗库存球，其他情况都走不耗球的一段。
 export function resolveSignalOrb(state: OrbState | undefined, color: ENanamiOrbColor): string {
     const orb = signalOrbs.find(candidate => candidate.color === color);
-    if (!orb || !state || state[orb.stockKey] < 1) {
+    if (!orb || !state) {
         return "";
     }
-    return state[orb.followUpKey] ? orb.followUp : orb.opening;
+    return state[orb.followUpKey] && state[orb.stockKey] > 0 ? orb.followUp : orb.opening;
 }
 
 // 两种颜色分别按各自的一、二段动作匹配，其他动作跳过信号球结算。
@@ -72,7 +72,7 @@ export function onOrbStarted(orbs: NanamiOrbComponent, actionId: string, instanc
 
     const spent = triple ? 1 : Math.min(stock, orbs.GetTrainingGroupSize(orb.color));
     const spentStars = Math.min(1, state.Stars);
-    // GP 中零星且耗光本色库存时，图标又显示约三秒；零库存始终拒绝输入。
+    // GP 中零星且耗光本色库存时，二段图标仍会显示约三秒。
     const keepIcon = state.Stars > spentStars || (spentStars === 0 && spent === stock);
     orbs.ApplyOrbResult(instanceId, orb.color, spent, triple ? 3 : spent, spentStars, keepIcon, false);
 }
