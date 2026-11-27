@@ -31,7 +31,7 @@ public:
 
     // 提交带有按键阶段的指令，并返回本次受理结果。
     UFUNCTION(BlueprintCallable, Category = "Combat")
-    ECombatInputResult SubmitInput(ECombatCommand Command, ECombatInputPhase Phase);
+    ECombatInputResult SubmitInput(ECombatCommand Command, ECombatInputPhase Phase, FVector WorldDirection = FVector::ZeroVector);
 
     // 主动停止并结算当前动作。
     UFUNCTION(BlueprintCallable, Category = "Combat")
@@ -47,6 +47,12 @@ public:
     // 返回本次出招的实例编号，空闲时返回零。
     UFUNCTION(BlueprintPure, Category = "Combat")
     int64 GetActiveInstanceId() const { return ActiveInstanceId; }
+
+    // 返回已起播闪避的世界方向，后闪与其他动作返回零向量。
+    const FVector& GetActiveDodgeDirection() const { return ActiveDodgeDirection; }
+
+    // 两种闪避从实际起播到退出期间，使用同一套训练场取景过渡。
+    bool IsDodging() const { return ActiveInstanceId != 0 && ActiveCommand == ECombatCommand::Dodge; }
 
     UPROPERTY(BlueprintAssignable, Category = "Combat")
     FCombatActionChanged OnActionChanged;
@@ -69,13 +75,17 @@ private:
     // 清除尚在分辨的短按和长按，解除对应计时器。
     void ResetBasicPress();
     // 把已成立的输入保留到本实例开窗或自然结束。
-    ECombatInputResult BufferInput(ECombatCommand Command, ECombatInputPhase Phase, FName ActionId, bool bWaitForWindow);
+    ECombatInputResult BufferInput(ECombatCommand Command, ECombatInputPhase Phase, FName ActionId, bool bWaitForWindow,
+        const FVector& Direction = FVector::ZeroVector);
     // 尝试以另一类指令打断当前普攻，仅在新动作成功起播后通知旧实例。
     ECombatInputResult TryInterruptBasicAttack(ECombatCommand Command, FName ActionId);
     // 只在当前动作明确配置的必杀窗口内排队或切招，普通动作可直接让出控制。
     ECombatInputResult SubmitUltimate(FName ActionId);
+    // 闪避仅在待机或来源动作授权的窗口发动，缓存保留按键当帧的方向。
+    ECombatInputResult SubmitDodge(FName ActionId, const FVector& Direction);
     // 播放选定动作，并用指定事件结算被替换的实例。
-    ECombatInputResult StartAction(ECombatCommand Command, FName ActionId, ECombatActionEvent PreviousEvent);
+    ECombatInputResult StartAction(ECombatCommand Command, FName ActionId, ECombatActionEvent PreviousEvent,
+        const FVector& Direction = FVector::ZeroVector);
     // 再次确认当前实例储存的出招意图仍有效，然后尝试切招一次。
     bool ConsumeBufferedInput(ECombatActionEvent PreviousEvent);
 
@@ -105,7 +115,9 @@ private:
     ECombatCommand ActiveCommand = ECombatCommand::BasicAttack;
     int64 ActiveInstanceId = 0;
     int64 LastInstanceId = 0;
+    FVector ActiveDodgeDirection = FVector::ZeroVector;
     FName BufferedActionId = NAME_None;
+    FVector BufferedDirection = FVector::ZeroVector;
     ECombatCommand BufferedCommand = ECombatCommand::BasicAttack;
     ECombatInputPhase BufferedPhase = ECombatInputPhase::Pressed;
     bool bEndingPlay = false;

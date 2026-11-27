@@ -77,6 +77,20 @@ public:
     float BufferLeadSeconds = 0.f;
 };
 
+// 来源动作可单独配置闪避窗口。分段动作按指定 Section 的本地时间填写。
+UCLASS(meta = (DisplayName = "Dodge Follow-up Window"))
+class PGRCOMBAT_API UCombatDodgeWindowTask : public UCombatWindowTask
+{
+    GENERATED_BODY()
+
+public:
+    UPROPERTY(EditAnywhere, Category = "Task")
+    FName RelativeToSection = NAME_None;
+
+    UPROPERTY(EditAnywhere, Category = "Task", meta = (ClampMin = "0", Units = "s"))
+    float BufferLeadSeconds = 0.f;
+};
+
 // 为本招单独指定允许交还移动控制的时间。
 UCLASS(meta = (DisplayName = "Movement Cancel Window"))
 class PGRCOMBAT_API UCombatMoveCancelWindowTask : public UCombatWindowTask
@@ -153,6 +167,8 @@ struct FCombatMontageTasks
     FCombatAbilityWindow BasicFollowUpChain;
     FCombatAbilityWindow YellowTapBuffer;
     FCombatAbilityWindow YellowTapChain;
+    FCombatAbilityWindow DodgeBuffer;
+    FCombatAbilityWindow DodgeChain;
     FCombatAbilityWindow UltimateBuffer;
     FCombatAbilityWindow UltimateChain;
 };

@@ -40,6 +40,12 @@ private:
     void RemoveCombatMapping();
     // 将本帧二维输入转换为训练镜头朝向下的移动意图。
     void OnMove(const FInputActionValue& Value);
+    // 把方向轴投到当前镜头所在的水平面，移动和方向闪共用。
+    FVector GetWorldMoveDirection(FVector2D Axis) const;
+    // 读取按下当帧的方向轴，静止后闪不受攻击根位移影响。
+    void OnDodgePressed();
+    // 让方向闪从起手就沿输入位移，角色按移动组件的角速度逐帧转身。
+    FTransform OrientDodgeRootMotion(const FTransform& WorldMotion, UCharacterMovementComponent* Movement, float DeltaSeconds);
     // 让成功起播的动作接管移动和朝向，动作结算后恢复移动转向。
     UFUNCTION()
     void OnCombatActionChanged(FName ActionId, int64 InstanceId, ECombatActionEvent Event);
@@ -82,6 +88,9 @@ private:
 
     UPROPERTY(EditDefaultsOnly, Category = "Combat|Input")
     TObjectPtr<UInputAction> UltimateAction;
+
+    UPROPERTY(EditDefaultsOnly, Category = "Combat|Input")
+    TObjectPtr<UInputAction> DodgeAction;
 
     UPROPERTY(EditDefaultsOnly, Category = "Combat|Presentation")
     TObjectPtr<USkeletalMesh> FighterMesh;

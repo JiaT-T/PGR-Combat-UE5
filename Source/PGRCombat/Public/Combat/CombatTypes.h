@@ -10,7 +10,8 @@ enum class ECombatCommand : uint8
     RedOrb,
     BlueOrb,
     YellowOrb,
-    Ultimate
+    Ultimate,
+    Dodge
 };
 
 UENUM(BlueprintType)
